@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h2 class="h4 mb-3">Upload an audio file</h2>
+        <form
+          hx-post="/upload"
+          hx-target="#upload-result"
+          hx-swap="innerHTML"
+          enctype="multipart/form-data"
+          class="row g-3"
+        >
+          <div class="col-12">
+            <input class="form-control" type="file" name="file" accept="audio/*" />
+          </div>
+          <div class="col-auto">
+            <button type="submit" class="btn btn-primary">
+              <span class="htmx-indicator spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+              Upload
+            </button>
+          </div>
+        </form>
+        <div id="upload-result" class="mt-3"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
