@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+.DS_Store
+
+# uploaded files (keep the folder in Git)
+uploads/*
+!uploads/.keep
