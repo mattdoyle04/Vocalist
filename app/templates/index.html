@@ -1,34 +1,529 @@
 {% extends "base.html" %}
 {% block content %}
 
-<div class="row justify-content-center">
-  <div class="col-lg-8">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <h2 class="h4 mb-3">Upload an audio file</h2>
+<div id="vocalist-app">
 
-        <form
-          hx-post="/upload"
-          hx-target="#upload-result"
-          hx-swap="innerHTML"
-          enctype="multipart/form-data"
-          class="row g-3"
-        >
-          <div class="col-12">
-            <input class="form-control" type="file" name="file" accept="audio/*" />
-          </div>
-          <div class="col-auto">
-            <button type="submit" class="btn btn-primary">
-              <span class="htmx-indicator spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-              Upload
-            </button>
-          </div>
-        </form>
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="brand">VocaList</div>
 
-        <div id="upload-result" class="mt-3"></div>
+    <!-- Right-side controls: STATS / HISTORY / AUTH -->
+    <div class="auth-ctrls" style="display:flex; gap:8px; align-items:center;">
+      <a class="stats-btn"
+         hx-get="/my-stats"
+         hx-target="body"
+         hx-swap="beforeend"
+         hx-push-url="false">STATS</a>
+
+      <a class="stats-btn"
+         href="/history"
+         hx-get="/history"
+         hx-target="body"
+         hx-swap="beforeend"
+         hx-push-url="false">HISTORY</a>
+
+      <span id="authEmailBadge" class="mode-pill" style="display:none"></span>
+      <button id="authLoginBtn"  class="stats-btn">LOG IN</button>
+      <button id="authLogoutBtn" class="stats-btn" style="display:none">LOG OUT</button>
+    </div>
+  </header>
+
+  <!-- Prestart overlay -->
+  <div class="prestart-banner"><div class="pill">PRESS START TO REVEAL TODAY’S LETTER & THEME</div></div>
+
+  <!-- Today (letter + theme) -->
+  <section class="today maskable">
+    <div class="compact-controls">
+      <div id="timerMini" class="timer-mini" aria-live="polite">01:00</div>
+      <button id="micMini" class="mic-mini" aria-pressed="false" title="Start/Stop microphone" disabled>🎤</button>
+    </div>
+    <div class="today-inner">
+      <div class="letter" id="letterBubble">—</div>
+      <div class="theme">
+        <div class="label">THEME</div>
+        <h1 id="themeHeading" class="value">—</h1>
       </div>
     </div>
-  </div>
+  </section>
+
+  <!-- Player name (server session/public handle) -->
+  <form class="name-form"
+        hx-post="/api/register"
+        hx-target="#playerBadge"
+        hx-swap="outerHTML"
+        style="margin:12px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    <input name="name" class="giant-input"
+           style="max-width:260px; font-size:18px; padding:10px 14px;"
+           placeholder="Your name" required />
+    <button class="stats-btn" type="submit">Set name</button>
+    <span id="playerBadge" class="mode-pill">{{ player_name or "" }}</span>
+  </form>
+
+  <!-- Composer -->
+  <section class="composer maskable">
+    <div class="composer-inner">
+      <div id="modePill" class="mode-pill" style="display:none">VOICE MODE</div>
+
+      <!-- Typing (default) -->
+      <input id="typeInput" class="giant-input" type="text" placeholder="" disabled />
+
+      <!-- Voice -->
+      <div id="liveTranscript" class="transcript" style="display:none">“<span id="transcriptText"></span>”<span id="dot" class="listening-dot" style="display:none"></span></div>
+
+      <!-- Tiny invalid hint -->
+      <div id="tinyHint" class="tiny-hint"></div>
+    </div>
+  </section>
+
+  <!-- Accepted anchor (filled when first valid word appears) -->
+  <section id="acceptedSectionAnchor"></section>
+
+  <!-- Bottom actions -->
+  <footer class="bottombar">
+    <div class="hint">TYPE WORDS OR TAP 🎤 TO SPEAK…</div>
+    <div class="actions">
+      <button id="startBtn" class="primary">START</button>
+      <button id="finishBtn" class="ghost" style="display:none">FINISH</button>
+
+      <button id="leaderboardBtn" class="ghost"
+              hx-get="/leaderboard"
+              hx-target="body"
+              hx-swap="beforeend">
+        LEADERBOARD
+      </button>
+    </div>
+  </footer>
+
+  <!-- Summary modal (native dialog) -->
+  <dialog id="summaryModal"><div class="modal-card">
+    <h2>TIME’S UP!</h2>
+    <p><strong id="scoreText">0</strong> VALID WORDS</p>
+    <p><small>INVALID: <span id="invalidText">0</span> • ACCURACY: <span id="accText">0%</span></small></p>
+    <div class="modal-actions"><button id="closeSummaryBtn" class="stats-btn">OK</button></div>
+  </div></dialog>
+
+  <!-- Login dialog -->
+  <dialog id="authDialog"><div class="modal-card">
+    <h2>Sign in</h2>
+    <p style="text-align:center">We’ll send you a magic link.</p>
+    <form id="authForm" style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-top:8px">
+      <input id="authEmailInput" type="email" required placeholder="you@email.com"
+             style="padding:10px 12px; min-width:260px; border:1px solid #E2E8F0; border-radius:8px">
+      <button class="stats-btn" type="submit">Send link</button>
+    </form>
+    <p id="authMsg" style="text-align:center; margin-top:8px; font-size:12px; color:#4A5568"></p>
+    <div class="modal-actions"><button id="authCloseBtn" class="stats-btn">Close</button></div>
+  </div></dialog>
+
+  <!-- Page-scoped styles -->
+  <style>
+    :root{--bg:#F8FAFB;--ink:#1A202C;--ink-2:#4A5568;--card:#FFF;--muted:#E2EEF4;--accent:#0E7C86;--ok:#2F855A;--bad:#C53030;--shadow:0 8px 24px rgba(26,32,44,.06);--radius:24px}
+    *{box-sizing:border-box}
+    .topbar{display:flex;align-items:center;justify-content:space-between;padding:24px clamp(16px,4vw,32px);max-width:1000px;margin:0 auto}
+    .brand{font-weight:800;font-size:1.5rem}
+    .stats-btn{background:#fff;border:1px solid #E2E8F0;border-radius:999px;padding:8px 14px;font-weight:700;box-shadow:var(--shadow);cursor:pointer}
+    .maskable{mask:linear-gradient(#000 80%,transparent)}
+    .bottombar{position:sticky;bottom:0;background:linear-gradient(180deg,rgba(248,250,251,0) 0%,rgba(248,250,251,1) 24%,rgba(248,250,251,1) 100%);padding:24px clamp(16px,4vw,32px);border-top:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .bottombar .hint{font-size:12px;color:var(--ink-2);letter-spacing:.06em}
+    .bottombar .actions{display:flex;gap:10px}
+    .bottombar .actions .primary{background:var(--accent);color:#fff;border:0;border-radius:999px;padding:12px 18px;font-weight:800;letter-spacing:.06em;cursor:pointer;box-shadow:var(--shadow)}
+    .bottombar .actions .ghost{background:#fff;border:1px solid #E2E8F0;border-radius:999px;padding:12px 18px;font-weight:800;letter-spacing:.06em;cursor:pointer;box-shadow:var(--shadow)}
+    .prestart .today,.prestart .composer{filter:blur(3px);opacity:.7}
+    .prestart-banner{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;font-weight:800;letter-spacing:.08em;color:#0f172a}
+    .prestart .prestart-banner{opacity:1}
+    .prestart-banner .pill{background:#ffffffcc;border:1px solid #e5e7eb;border-radius:999px;padding:10px 16px;box-shadow:var(--shadow)}
+    .today{position:relative;padding:18px;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);max-width:1000px;margin:0 auto 16px auto}
+    .today-inner{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center}
+    .letter{width:84px;height:84px;border-radius:999px;display:grid;place-items:center;background:var(--accent);color:#fff;font-weight:800;font-size:48px}
+    .theme .label{color:var(--ink-2);font-size:12px;letter-spacing:.08em}
+    .theme .value{margin:.25rem 0 0;font-size:28px;letter-spacing:.04em}
+    .compact-controls{position:absolute;right:14px;top:14px;display:flex;flex-direction:column;align-items:center;gap:6px}
+    .timer-mini{min-width:78px;height:34px;padding:0 10px;border-radius:999px;background:#fff;border:1px solid #E2E8F0;display:inline-grid;place-items:center;font-weight:800;font-size:14px;letter-spacing:.06em}
+    .mic-mini{width:38px;height:38px;border-radius:999px;border:0;background:#fff;display:inline-grid;place-items:center;font-size:18px;cursor:pointer;box-shadow:var(--shadow)}
+    .mic-mini[aria-pressed="false"]{opacity:.9}
+    .composer{padding:28px 16px;background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);max-width:1000px;margin:0 auto}
+    .composer-inner{display:flex;flex-direction:column;align-items:center;gap:16px}
+    .giant-input{width:100%;max-width:900px;text-align:center;font-size:48px;font-weight:800;color:var(--ink);min-height:60px;opacity:.95;letter-spacing:.08em;border:0;outline:0;padding:16px 8px;border-radius:12px;border-bottom:2px solid #E2E8F0}
+    .giant-input.invalid{border-bottom-color:#C53030}
+    .transcript{width:100%;max-width:900px;text-align:center;font-size:32px;font-weight:700;color:var(--ink);min-height:40px;opacity:.95;letter-spacing:.04em}
+    .listening-dot{display:inline-block;width:8px;height:8px;border-radius:999px;background:var(--accent);margin-left:8px;vertical-align:middle}
+    .mode-pill{font-size:12px;color:#0f172a;background:#e2f4f6;border:1px solid #c7ecef;padding:2px 8px;border-radius:999px}
+    .tiny-hint{height:0;font-size:12px;color:#C53030;background:transparent;font-weight:700;padding:0 8px;border-radius:999px;opacity:0;transform:translateY(-8px);transition:opacity .2s,transform .2s;margin-top:-8px;text-transform:uppercase}
+    .tiny-hint.show{height:auto;opacity:1;transform:translateY(0);margin-top:0}
+    .flash-good{animation:flashGood .3s linear}.flash-bad{animation:flashBad .3s linear}
+    @keyframes flashGood{0%{background:#ecfdf5}100%{background:transparent}}
+    @keyframes flashBad{0%{background:#fef2f2}100%{background:transparent}}
+    .shake{animation:shake .2s linear 2}
+    @keyframes shake{0%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}100%{transform:translateX(0)}}
+    .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px}
+    .card h2{font-size:14px;color:var(--ink-2);letter-spacing:.06em;margin:0 0 10px}
+    .accepted{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+    .accepted li{padding:10px 12px;border:1px solid #E2E8F0;border-radius:12px;font-weight:800;letter-spacing:.06em}
+    .accepted li .meta{display:block;font-size:12px;color:var(--ink-2);margin-top:4px}
+    dialog{border:0;border-radius:16px;padding:0;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.14)}
+    .modal-card{padding:24px 24px 16px}
+    dialog h2{margin:0 0 4px;text-align:center;letter-spacing:.06em}
+    dialog p{margin:8px 0;text-align:center}
+    .modal-actions{display:flex;gap:10px;justify-content:center;margin-top:12px}
+  </style>
+
+  <!-- Page script (game logic) -->
+  <script>
+    // ===== Daily seed (client mirror; server is authoritative when saving) =====
+    const DAILY = (() => {
+      const d = new Date(); const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), dd=String(d.getDate()).padStart(2,"0");
+      const key = `${y}-${m}-${dd}`;
+      function hash32(s){let h=2166136261>>>0;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+      function mulberry32(a){return function(){var t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
+      const LETTERS="ETAOINSHRDLCUMWFGYPBVKJXQZ".split(""), THEMES=["ANIMALS","FOOD","SPORTS","TRAVEL","MUSIC","NATURE","TECH","COLORS","CITIES","MOVIES"];
+      const rng = mulberry32(hash32(key));
+      return { letter: LETTERS[Math.floor(rng()*LETTERS.length)], theme: THEMES[Math.floor(rng()*THEMES.length)], roundSeconds: 60 };
+    })();
+
+    const SCRABBLE = (w) => { const m={a:1,b:3,c:3,d:2,e:1,f:4,g:2,h:4,i:1,j:8,k:5,l:1,m:3,n:1,o:1,p:3,q:10,r:1,s:1,t:1,u:1,v:4,w:4,x:8,y:4,z:10};
+      return String(w||"").toLowerCase().split("").reduce((s,ch)=>s+(m[ch]||0),0);
+    };
+
+    // Local stats helpers
+    const LS_KEY = "vocalist_stats_v1";
+    function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}` }
+    function loadStatsRaw(){ try { return JSON.parse(localStorage.getItem(LS_KEY) || "null"); } catch { return null; } }
+    function defaultStats(){ return { games:[], totals:{valid:0,invalid:0,time:0,letters:0}, streak:{current:0,longest:0,lastPlayed:null}, records:{bestDayScore:0,bestScrabbleWord:{word:"",score:0}} }; }
+    function getStats(){
+      const raw=loadStatsRaw()||{}; const s=defaultStats();
+      if(Array.isArray(raw.games)) s.games=raw.games;
+      if(raw.totals&&typeof raw.totals==="object") Object.assign(s.totals,raw.totals);
+      if(raw.streak&&typeof raw.streak==="object") Object.assign(s.streak,raw.streak);
+      if(raw.records&&typeof raw.records==="object"){ Object.assign(s.records,raw.records); if(!s.records.bestScrabbleWord) s.records.bestScrabbleWord={word:"",score:0}; }
+      return s;
+    }
+    function saveStats(s){ try{ localStorage.setItem(LS_KEY, JSON.stringify(s)); }catch{} }
+
+    // DOM shortcuts
+    const $ = (id)=>document.getElementById(id);
+    document.body.classList.add("prestart");
+    const el = {
+      letterBubble:$("letterBubble"), themeHeading:$("themeHeading"),
+      timerMini:$("timerMini"), micMini:$("micMini"),
+      typeInput:$("typeInput"), tinyHint:$("tinyHint"),
+      liveTranscript:$("liveTranscript"), transcriptText:$("transcriptText"), dot:$("dot"),
+      startBtn:$("startBtn"), finishBtn:$("finishBtn"),
+      summaryModal:$("summaryModal"), closeSummaryBtn:$("closeSummaryBtn"),
+      scoreText:$("scoreText"), invalidText:$("invalidText"), accText:$("accText"),
+      acceptedAnchor:$("acceptedSectionAnchor"), modePill:$("modePill"),
+      authDialog:$("authDialog"), authForm:$("authForm"),
+    };
+
+    // State
+    const state = { voice:false, listening:false, remaining:DAILY.roundSeconds, words:new Set(), invalid:0, sr:null, timerId:null, startedAt:null };
+
+    // Init
+    (function init(){
+      $("vocalist-app")?.scrollTo?.(0,0);
+      $("authCloseBtn")?.addEventListener("click", ()=> el.authDialog.close());
+      el.closeSummaryBtn.addEventListener("click", ()=> el.summaryModal.close());
+
+      el.typeInput.addEventListener("keydown", (e)=>{
+        if (e.key==="Enter"){ e.preventDefault(); const v=el.typeInput.value.trim(); if(!v) return; acceptCandidate(v, true); el.typeInput.value=""; }
+      });
+
+      el.micMini.addEventListener("click", ()=>{ state.voice=!state.voice; if(state.voice) enterVoiceMode(); else exitVoiceMode(); });
+
+      $("authLoginBtn")?.addEventListener("click", ()=> el.authDialog.showModal());
+
+      el.startBtn.addEventListener("click", startRound);
+      el.finishBtn.addEventListener("click", endRound);
+    })();
+
+    function ensureAcceptedUI(){
+      if (ensureAcceptedUI._ul) return;
+      const section=document.createElement("section");
+      const card=document.createElement("div"); card.className="card";
+      const h2=document.createElement("h2"); h2.textContent="ACCEPTED";
+      const ul=document.createElement("ul"); ul.className="accepted";
+      card.append(h2,ul); section.append(card);
+      el.acceptedAnchor.replaceWith(section);
+      ensureAcceptedUI._ul=ul;
+    }
+    function showTinyHint(msg){
+      el.tinyHint.textContent = String(msg||"").toUpperCase();
+      el.tinyHint.classList.add("show");
+      clearTimeout(showTinyHint._t); showTinyHint._t=setTimeout(()=> el.tinyHint.classList.remove("show"), 1200);
+    }
+    function invalidFeedback(fromTyping, reason){
+      state.invalid++;
+      if(fromTyping){
+        el.typeInput.classList.remove("invalid","shake","flash-bad"); void el.typeInput.offsetWidth;
+        el.typeInput.classList.add("flash-bad","invalid","shake");
+        showTinyHint(reason);
+      }
+    }
+    function setMicVisual(on){ el.micMini.setAttribute("aria-pressed", String(on)); }
+
+    // Voice
+    function ensureSpeech(){
+      const SR=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SR) return null;
+      const r=new SR(); r.continuous=true; r.interimResults=true; r.lang="en-AU";
+      r.onresult=(e)=>{ const t=Array.from(e.results).slice(e.resultIndex).map(r=>r[0].transcript).join(" "); el.liveTranscript.textContent="“"+t.toUpperCase()+"”"; t.toLowerCase().split(/\s+/).forEach(w=>acceptCandidate(w,false)); };
+      r.onerror=_=>{}; r.onend=()=>{ if(state.voice && state.remaining>0) try{ r.start(); }catch{} };
+      return r;
+    }
+    function enterVoiceMode(){ el.typeInput.style.display="none"; el.liveTranscript.style.display="block"; el.modePill.style.display="inline-block"; if(!state.sr) state.sr=ensureSpeech(); if(!state.sr){ showTinyHint("VOICE NOT SUPPORTED"); state.voice=false; return exitVoiceMode(); } state.listening=true; setMicVisual(true); try{ state.sr.start(); }catch{} el.dot.style.display="inline-block"; }
+    function exitVoiceMode(){ el.typeInput.style.display="block"; el.liveTranscript.style.display="none"; el.modePill.style.display="none"; el.dot.style.display="none"; if(state.listening){ state.listening=false; setMicVisual(false); try{ state.sr.stop(); }catch{} } }
+
+    // Server-sync for letter/theme (Melbourne)
+    async function syncToday(){
+      try{
+        const r = await fetch('/api/today');
+        if(!r.ok) return;
+        const data = await r.json();
+        if(data.letter) DAILY.letter = data.letter;
+        if(data.theme)  DAILY.theme  = data.theme;
+      }catch{}
+    }
+
+    // Round
+    async function startRound(){
+      await syncToday();
+
+      document.body.classList.remove("prestart");
+      document.querySelector(".prestart-banner")?.remove();
+
+      el.letterBubble.textContent = DAILY.letter.toUpperCase();
+      el.themeHeading.textContent = DAILY.theme.toUpperCase();
+      el.typeInput.placeholder = DAILY.letter.toUpperCase();
+      el.typeInput.disabled = false; el.micMini.disabled=false;
+
+      if(ensureAcceptedUI._ul) ensureAcceptedUI._ul.innerHTML="";
+      state.words.clear(); state.invalid=0; state.startedAt=Date.now();
+
+      el.finishBtn.style.display="inline-block"; el.startBtn.style.display="none";
+      setTimer(DAILY.roundSeconds);
+
+      if(state.voice) enterVoiceMode(); else { exitVoiceMode(); el.typeInput.focus(); }
+
+      clearInterval(state.timerId);
+      state.timerId=setInterval(()=>{ state.remaining=Math.max(0,state.remaining-1); el.timerMini.textContent=new Date(state.remaining*1000).toISOString().substr(14,5); if(state.remaining<=0) endRound(); },1000);
+    }
+    function setTimer(secs){ state.remaining=secs; el.timerMini.textContent=new Date(secs*1000).toISOString().substr(14,5); }
+
+    // Validation + accept (server-authoritative check)
+    async function acceptCandidate(raw, fromTyping){
+      const w = String(raw||"").toLowerCase().replace(/[^a-z\u00C0-\u024f'-]/g,"");
+      if (!w) return;
+
+      if (state.words.has(w)) return invalidFeedback(fromTyping, "DUPLICATE");
+      if (w.length < 3)      return invalidFeedback(fromTyping, "MIN LENGTH");
+      if (!w.startsWith(DAILY.letter.toLowerCase()))
+        return invalidFeedback(fromTyping, `MUST START “${DAILY.letter}”`);
+
+      try {
+        const r = await fetch('/api/check-word', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ word: w })
+        });
+        const data = await r.json();
+        if (!data.ok) return invalidFeedback(fromTyping, "NOT A WORD");
+        if (data.letter && data.letter.toUpperCase() !== DAILY.letter.toUpperCase()) {
+          showTinyHint(`SERVER LETTER: “${data.letter.toUpperCase()}”`);
+        }
+      } catch {
+        return invalidFeedback(fromTyping, "CHECK FAILED");
+      }
+
+      state.words.add(w);
+      ensureAcceptedUI();
+      const li=document.createElement("li");
+      li.textContent=w.toUpperCase();
+      const meta=document.createElement("span");
+      meta.className="meta";
+      meta.textContent=`${w.length} • ${SCRABBLE(w)} pts`;
+      li.appendChild(meta);
+      li.classList.add("flash-good");
+      ensureAcceptedUI._ul.prepend(li);
+    }
+
+    // Finish & save
+    async function endRound(){
+      clearInterval(state.timerId);
+      el.finishBtn.style.display="none"; el.startBtn.style.display="inline-block";
+      if(state.listening){ state.listening=false; setMicVisual(false); try{ state.sr.stop(); }catch{} }
+
+      const valid = state.words.size;
+      const invalid = state.invalid;
+      const total = valid + invalid;
+      const acc = total ? Math.round((valid/total)*100) : 0;
+
+      el.scoreText.textContent = String(valid);
+      el.invalidText.textContent = String(invalid);
+      el.accText.textContent = acc + "%";
+      el.summaryModal.showModal();
+
+      const gameSeconds=Math.max(1,Math.round((Date.now()-(state.startedAt||Date.now()))/1000));
+      const wpm=+(valid/(gameSeconds/60)).toFixed(2);
+      const avgLen=valid?+(Array.from(state.words).reduce((s,w)=>s+w.length,0)/valid).toFixed(2):0;
+      let bestWord="", bestScore=0; for(const w of state.words){ const sc=SCRABBLE(w); if(sc>bestScore||(sc===bestScore&&w.length>bestWord.length)){ bestWord=w.toUpperCase(); bestScore=sc; } }
+      const s=getStats(); const today=todayISO();
+      if(!s.streak.lastPlayed){ s.streak.current=1; s.streak.longest=Math.max(s.streak.longest||0,1); s.streak.lastPlayed=today; }
+      else{ const d1=new Date(s.streak.lastPlayed+"T00:00:00"); const d2=new Date(today+"T00:00:00"); const diff=(d2-d1)/(1000*60*60*24);
+        if(diff===1){ s.streak.current=(s.streak.current||0)+1; s.streak.longest=Math.max(s.streak.longest||0,s.streak.current); s.streak.lastPlayed=today; }
+        else if(diff>1){ s.streak.current=1; s.streak.lastPlayed=today; } }
+      s.games.push({date:today,valid,invalid,acc,wpm,avgLen,bestWord,bestScore});
+      s.totals.valid=(s.totals.valid||0)+valid; s.totals.invalid=(s.totals.invalid||0)+invalid; s.totals.time=(s.totals.time||0)+gameSeconds; s.totals.letters=(s.totals.letters||0)+Array.from(state.words).reduce((z,w)=>z+w.length,0);
+      const todayTotalValid=s.games.filter(g=>g.date===today).reduce((z,g)=>z+g.valid,0);
+      s.records.bestDayScore=Math.max(s.records.bestDayScore||0,todayTotalValid);
+      if(bestScore>(s.records.bestScrabbleWord?.score||0)) s.records.bestScrabbleWord={word:bestWord,score:bestScore};
+      saveStats(s);
+
+      try {
+        const resp = await fetch('/api/submit-run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            words: Array.from(state.words),
+            inputs: state.words.size + state.invalid,
+            duration: gameSeconds
+          })
+        });
+        if (!resp.ok) {
+          const msg = await resp.text();
+          showTinyHint(resp.status === 401 ? "SET NAME FIRST" : ("SAVE ERR " + resp.status));
+          console.warn('submit-run failed:', resp.status, msg);
+        }
+      } catch (e) {
+        console.warn('submit-run failed:', e);
+        showTinyHint("NETWORK ERROR");
+      }
+    }
+  </script>
+
+  <!-- Supabase client + Auth glue -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    const SUPABASE_URL  = window.SUPABASE_URL || "";
+    const SUPABASE_ANON = window.SUPABASE_ANON || "";
+    const sb = (SUPABASE_URL && SUPABASE_ANON) ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON) : null;
+    window.sb = sb; // make it global so all handlers see it
+    if (!sb) console.warn('Supabase client not initialised — check SUPABASE_URL / SUPABASE_ANON.');
+
+    const authEls = {
+      badge: document.getElementById('authEmailBadge'),
+      loginBtn: document.getElementById('authLoginBtn'),
+      logoutBtn: document.getElementById('authLogoutBtn'),
+      dialog: document.getElementById('authDialog'),
+      form: document.getElementById('authForm'),
+      email: document.getElementById('authEmailInput'),
+      msg: document.getElementById('authMsg'),
+      close: document.getElementById('authCloseBtn'),
+    };
+
+    window.__supabase_token = null;
+
+    async function refreshAuthUI() {
+      if (!sb) {
+        authEls.loginBtn?.setAttribute('disabled','');
+        authEls.loginBtn?.setAttribute('title','Supabase not configured');
+        return;
+      }
+      const { data: { session } } = await sb.auth.getSession();
+      const token = session?.access_token || null;
+      window.__supabase_token = token;
+
+      const email = session?.user?.email || "";
+      const signedIn = !!token;
+
+      authEls.badge.style.display = signedIn ? 'inline-block' : 'none';
+      authEls.badge.textContent = signedIn ? email : '';
+      authEls.loginBtn.style.display = signedIn ? 'none' : 'inline-block';
+      authEls.logoutBtn.style.display = signedIn ? 'inline-block' : 'none';
+    }
+
+    // Add Authorization to htmx requests
+    document.body.addEventListener('htmx:configRequest', (e) => {
+      if (window.__supabase_token) {
+        e.detail.headers['Authorization'] = 'Bearer ' + window.__supabase_token;
+      }
+    });
+
+    // Add Authorization to fetch() (same-origin only)
+    (function wrapFetch(){
+      const _fetch = window.fetch.bind(window);
+      window.fetch = (input, init = {}) => {
+        const url = (typeof input === 'string') ? input : (input?.url || '');
+        const sameOrigin = !/^https?:\/\//i.test(url) || url.startsWith(location.origin);
+        if (sameOrigin) {
+          init.headers = new Headers(init.headers || {});
+          if (window.__supabase_token && !init.headers.has('Authorization')) {
+            init.headers.set('Authorization', 'Bearer ' + window.__supabase_token);
+          }
+        }
+        return _fetch(input, init);
+      };
+    })();
+
+    // Open/close dialog
+    authEls.loginBtn?.addEventListener('click', () => authEls.dialog.showModal());
+    authEls.close?.addEventListener('click', () => authEls.dialog.close());
+
+    // Submit handler with loud feedback
+    authEls.form?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!sb) {
+        authEls.msg.textContent = 'Auth not configured.';
+        return;
+      }
+
+      const email = authEls.email.value.trim();
+      if (!email) return;
+
+      authEls.msg.textContent = 'Sending…';
+      const btn = authEls.form.querySelector('button[type="submit"]');
+      if (btn) btn.disabled = true;
+
+      try {
+        // Simpler: let Supabase use your configured Site URL
+        const { error } = await sb.auth.signInWithOtp({ email });
+        // If you prefer explicit redirect, ensure it's allow-listed in Supabase:
+        // const { error } = await sb.auth.signInWithOtp({
+        //   email, options: { emailRedirectTo: window.location.origin }
+        // });
+
+        if (error) {
+          console.error('signInWithOtp error:', error);
+          authEls.msg.textContent = 'Error: ' + error.message;
+        } else {
+          authEls.msg.textContent = 'Check your email for a login link.';
+        }
+      } catch (err) {
+        console.error('signInWithOtp threw:', err);
+        authEls.msg.textContent = 'Error: ' + (err?.message || 'unknown');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    });
+
+    // Logout
+    authEls.logoutBtn?.addEventListener('click', async () => {
+      if (!sb) return;
+      await sb.auth.signOut();
+      await refreshAuthUI();
+    });
+
+    // Diagnostics + initial paint
+    if (sb) {
+      sb.auth.onAuthStateChange((event, session) => {
+        console.log('[auth]', event, !!session, session?.user?.email);
+        refreshAuthUI();
+      });
+      sb.auth.getSession().then(({ data }) => {
+        console.log('[auth] initial session:', !!data.session, data.session?.user?.email);
+        refreshAuthUI();
+      });
+    } else {
+      console.warn('Supabase client not initialised — check SUPABASE_URL / SUPABASE_ANON.');
+    }
+  </script>
 </div>
 
 {% endblock %}

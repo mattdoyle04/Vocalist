@@ -1,0 +1,34 @@
+<div class="modal fade show" style="display:block;" tabindex="-1" aria-modal="true" role="dialog">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Stats — {{ name }}</h5>
+        <button type="button" class="btn-close" aria-label="Close" onclick="this.closest('.modal').remove()"></button>
+      </div>
+      <div class="modal-body">
+        <div class="card">
+          <h2>ALL-TIME</h2>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
+            <div class="card"><div>TOTAL GAMES</div><div style="font-weight:800;font-size:24px">{{ stats.total_games }}</div></div>
+            <div class="card"><div>TOTAL VALID</div><div style="font-weight:800;font-size:24px">{{ stats.total_valid }}</div></div>
+            <div class="card"><div>AVG ACCURACY</div><div style="font-weight:800;font-size:24px">{{ stats.avg_accuracy }}%</div></div>
+            <div class="card"><div>AVG WPM</div><div style="font-weight:800;font-size:24px">{{ stats.avg_wpm }}</div></div>
+            <div class="card"><div>AVG WORD LEN</div><div style="font-weight:800;font-size:24px">{{ stats.avg_word_len }}</div></div>
+            <div class="card"><div>BEST DAY SCORE</div><div style="font-weight:800;font-size:24px">{{ stats.best_day_score }}</div></div>
+            <div class="card"><div>CURRENT STREAK</div><div style="font-weight:800;font-size:24px">{{ stats.current_streak }}</div></div>
+            <div class="card"><div>LONGEST STREAK</div><div style="font-weight:800;font-size:24px">{{ stats.longest_streak }}</div></div>
+            <div class="card" style="grid-column:1/-1">
+              <div>LONGEST SCRABBLE WORD</div>
+              <div style="font-weight:800;font-size:20px">
+                {% if stats.best_scrabble_word %}{{ stats.best_scrabble_word }} ({{ stats.best_scrabble_points }}){% else %}—{% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="this.closest('.modal').remove()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>

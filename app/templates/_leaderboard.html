@@ -1,0 +1,37 @@
+<div class="modal fade show" style="display:block;" tabindex="-1" aria-modal="true" role="dialog">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Leaderboard — {{ date }} (Best day totals)</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"
+                onclick="this.closest('.modal').remove()"></button>
+      </div>
+      <div class="modal-body">
+        {% if items and items|length > 0 %}
+        <div class="table-responsive">
+          <table class="table table-sm align-middle">
+            <thead>
+              <tr><th>#</th><th>Name</th><th class="text-end">Total</th><th class="text-end">Runs</th></tr>
+            </thead>
+            <tbody>
+              {% for row in items %}
+              <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ row.name }}</td>
+                <td class="text-end">{{ row.total }}</td>
+                <td class="text-end">{{ row.runs }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+          <div class="alert alert-secondary mb-0">No scores yet today — be the first!</div>
+        {% endif %}
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="this.closest('.modal').remove()">Close</button>
+      </div>
+    </div>
+  </div>
+</div>

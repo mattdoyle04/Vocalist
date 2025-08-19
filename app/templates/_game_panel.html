@@ -1,0 +1,98 @@
+<div id="game-panel"
+     hx-get="/game/panel"
+     hx-trigger="every 1s"
+     hx-swap="outerHTML"
+     class="card shadow-sm mb-4">
+  <div class="card-body">
+    <div class="d-flex align-items-center gap-3">
+      <h2 class="h5 mb-0">Round {{ game.round or 0 }} · {{ game.word_len }}-letter words</h2>
+
+      <!-- Stars -->
+      <div class="ms-2">
+        {% set s = stars or 0 %}
+        <i class="bi {% if s >= 1 %}bi-star-fill text-warning{% else %}bi-star{% endif %}"></i>
+        <i class="bi {% if s >= 2 %}bi-star-fill text-warning{% else %}bi-star{% endif %}"></i>
+        <i class="bi {% if s >= 3 %}bi-star-fill text-warning{% else %}bi-star{% endif %}"></i>
+      </div>
+
+      {% if game.active and remaining > 0 %}
+        <span class="badge text-bg-danger">LIVE</span>
+        <span class="ms-auto text-muted">Time left: {{ remaining }}s</span>
+      {% else %}
+        <span class="badge text-bg-secondary">idle</span>
+        <span class="ms-auto text-muted">Score: {{ game.score }}</span>
+      {% endif %}
+    </div>
+
+    <!-- Rule/Letter -->
+    <div class="mt-3 d-flex align-items-center">
+      <div class="me-3">
+        <span class="text-muted">Rule:</span>
+        <span class="badge text-bg-primary">Must start with {{ (game.letter or '?')|upper }}</span>
+      </div>
+      <form class="ms-auto"
+            hx-post="/game/reroll"
+            hx-target="#game-panel"
+            hx-swap="outerHTML">
+        <button class="btn btn-sm btn-outline-secondary" type="submit" {% if game.active and remaining > 0 %}disabled{% endif %}>
+          <i class="bi bi-shuffle"></i> Reroll letter
+        </button>
+      </form>
+    </div>
+
+    {% if game.finished %}
+      {% if game.last_success %}
+        <div class="alert alert-success mt-3 mb-2" role="alert">
+          Round passed! (target {{ game.target }}) — ⭐ earned.
+        </div>
+        {% if game.round < 3 %}
+          <form class="mt-2"
+                hx-post="/game/next"
+                hx-target="#game-panel"
+                hx-swap="outerHTML">
+            <button class="btn btn-outline-primary" type="submit">
+              Next round ({{ 5 if game.word_len==4 else 6 }} letters)
+            </button>
+          </form>
+        {% else %}
+          <div class="alert alert-primary mt-3 mb-2">All rounds complete — 3 stars!</div>
+        {% endif %}
+      {% else %}
+        <div class="alert alert-warning mt-3 mb-2" role="alert">
+          Round failed — score {{ game.score }} / target {{ game.target }}. Try again.
+        </div>
+      {% endif %}
+    {% endif %}
+
+    <!-- Start/Restart form -->
+    <form class="row g-2 mt-3"
+          hx-post="/game/start"
+          hx-target="#game-panel"
+          hx-swap="outerHTML">
+      <div class="col-auto">
+        <label class="form-label">Length</label>
+        <select class="form-select" name="len">
+          <option value="4" {% if game.word_len==4 %}selected{% endif %}>4</option>
+          <option value="5" {% if game.word_len==5 %}selected{% endif %}>5</option>
+          <option value="6" {% if game.word_len==6 %}selected{% endif %}>6</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label">Duration (s)</label>
+        <input class="form-control" type="number" name="duration" value="30" min="5" max="300" />
+      </div>
+      <div class="col-auto">
+        <label class="form-label">Target</label>
+        <input class="form-control" type="number" name="target" value="{{ game.target or 1 }}" min="1" max="100" />
+      </div>
+      <div class="col-auto align-self-end">
+        <button class="btn btn-primary" type="submit">
+          {% if game.active and remaining > 0 %}Restart{% else %}Start{% endif %} round
+        </button>
+      </div>
+      <div class="col-auto align-self-end ms-auto">
+        <span class="text-muted">Stars: {{ stars or 0 }}/3</span>
+      </div>
+    </form>
+  </div>
+</div>
