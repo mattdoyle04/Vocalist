@@ -11,6 +11,7 @@ SUPABASE_JWKS_URL = os.getenv("SUPABASE_JWKS_URL") or (SUPABASE_URL.rstrip("/") 
 SUPABASE_ISS = os.getenv("SUPABASE_ISS") or (SUPABASE_URL.rstrip("/") + "/auth/v1" if SUPABASE_URL else "")
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///vocalist.db")
 
+import re
 import json, time, requests
 from collections import deque
 from typing import Optional, List, Tuple, Dict, Iterable
@@ -38,6 +39,54 @@ from jwt import InvalidTokenError, algorithms
 app = FastAPI(title="Vocalist")
 app.add_middleware(SessionMiddleware, secret_key=os.getenv("SESSION_SECRET", "dev-secret-change-me"))
 templates = Jinja2Templates(directory="app/templates")
+
+THEME_MODE = os.getenv("THEME_MODE", "soft").strip().lower()  # 'soft' or 'strict'
+THEMES_DIR = Path(__file__).resolve().parents[1] / "app" / "data" / "themes"
+
+# In-memory theme sets: "ANIMALS" -> set([...])
+THEME_SETS: dict[str, set[str]] = {}
+
+_PLURAL_PATTERNS = [
+    (re.compile(r"ies$"), "y"),        # cities -> city
+    (re.compile(r"ves$"), "f"),        # wolves -> wolf (rough)
+    (re.compile(r"s$"), ""),           # cats -> cat (very rough)
+]
+
+def _norm_word(w: str) -> str:
+    t = (w or "").strip().lower()
+    if len(t) < 3:
+        return t
+    for pat, repl in _PLURAL_PATTERNS:
+        if pat.search(t):
+            return pat.sub(repl, t)
+    return t
+
+def load_theme_sets() -> None:
+    """Load all *.txt in THEMES_DIR into THEME_SETS (uppercase key)."""
+    THEME_SETS.clear()
+    if not THEMES_DIR.exists():
+        return
+    for p in THEMES_DIR.glob("*.txt"):
+        key = p.stem.strip().upper()
+        words = set()
+        try:
+            with p.open("r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    words.add(_norm_word(line))
+        except Exception:
+            pass
+        if words:
+            THEME_SETS[key] = words
+
+def theme_match(word: str, theme: str) -> bool:
+    """Return True if `word` fits the `theme` based on curated lists."""
+    key = (theme or "").strip().upper()
+    if not key or key not in THEME_SETS:
+        return False
+    return _norm_word(word) in THEME_SETS[key]
 
 # ======================================================================================
 # Time & daily seed (server-truth, Melbourne)
@@ -99,7 +148,7 @@ class Player(SQLModel, table=True):
     created_at: datetime = Field(default_factory=mel_now)
 
 class GameRun(SQLModel, table=True):
-    __tablename__ = "game_run"  # << add this line
+    __tablename__ = "game_run"
     id: Optional[int] = Field(default=None, primary_key=True)
     player_id: int = Field(foreign_key="player.id")
     play_date: date = Field(index=True)
@@ -109,11 +158,9 @@ class GameRun(SQLModel, table=True):
     score: int
     words_json: str
     inputs: int
+    off_theme_count: int = 0   # <-- add this
     created_at: datetime = Field(default_factory=mel_now)
 
-
-# def create_db_and_tables():
-#     SQLModel.metadata.create_all(engine)
 
 def _ensure_auth_columns():
     """Tiny migration to add user_uid/auth_provider to Player if missing."""
@@ -333,9 +380,8 @@ async def security_and_limits(request: Request, call_next):
 # ======================================================================================
 @app.on_event("startup")
 def _on_start():
-    create_db_and_tables()
-    _ensure_auth_columns()
     _load_jwks()
+    load_theme_sets()
 
 # ======================================================================================
 # Pages & tiny API
@@ -399,18 +445,25 @@ async def register(request: Request):
 @app.post("/api/check-word")
 async def check_word(word: str = Body(..., embed=True)):
     today = mel_today()
-    letter, _ = daily_seed(today)
+    letter, theme = daily_seed(today)
     t = (word or "").strip().lower()
-    ok = _canonise_words([t], required_letter=letter) == [t]
-    return JSONResponse({"ok": ok, "letter": letter})
+
+    ok_letter = len(t) >= 3 and t.startswith(letter.lower())
+    ok_dict = _is_dictionary_word(t)
+    ok = ok_letter and ok_dict
+
+    theme_ok = theme_match(t, theme) if ok else False
+
+    return JSONResponse({
+        "ok": ok,
+        "letter": letter,
+        "theme": theme,
+        "theme_ok": theme_ok,
+        "theme_mode": THEME_MODE,
+    })
 
 @app.post("/api/submit-run")
 async def submit_run(request: Request):
-    """
-    Accepts JSON: { words: [..], inputs: N, duration: 60 }
-    Saves a row for today's date (Melbourne), using server-picked letter/theme.
-    Score is recomputed server-side using dictionary validation.
-    """
     body = await request.json()
     words = body.get("words") or []
     inputs = int(body.get("inputs") or 0)
@@ -418,8 +471,12 @@ async def submit_run(request: Request):
 
     today = mel_today()
     letter, theme = daily_seed(today)
+
     canon = _canonise_words(words, required_letter=letter)
-    score = len(canon)
+    canon_on_theme = [w for w in canon if theme_match(w, theme)]
+    off_theme_count = max(0, len(canon) - len(canon_on_theme))
+
+    score = len(canon_on_theme)
 
     with Session(engine) as s:
         player = _resolve_player(s, request)
@@ -430,8 +487,9 @@ async def submit_run(request: Request):
             theme=theme,
             duration=duration,
             score=score,
-            words_json=json.dumps(canon),
+            words_json=json.dumps(canon_on_theme),  # store only on-theme words
             inputs=inputs,
+            off_theme_count=off_theme_count,
         )
         s.add(gr); s.commit()
 
