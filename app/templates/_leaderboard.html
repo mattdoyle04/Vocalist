@@ -1,37 +1,25 @@
-<div class="modal fade show" style="display:block;" tabindex="-1" aria-modal="true" role="dialog">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Leaderboard — {{ date }} (Best day totals)</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"
-                onclick="this.closest('.modal').remove()"></button>
-      </div>
-      <div class="modal-body">
-        {% if items and items|length > 0 %}
-        <div class="table-responsive">
-          <table class="table table-sm align-middle">
-            <thead>
-              <tr><th>#</th><th>Name</th><th class="text-end">Total</th><th class="text-end">Runs</th></tr>
-            </thead>
-            <tbody>
-              {% for row in items %}
-              <tr>
-                <td>{{ loop.index }}</td>
-                <td>{{ row.name }}</td>
-                <td class="text-end">{{ row.total }}</td>
-                <td class="text-end">{{ row.runs }}</td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
-        </div>
-        {% else %}
-          <div class="alert alert-secondary mb-0">No scores yet today — be the first!</div>
-        {% endif %}
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-primary" onclick="this.closest('.modal').remove()">Close</button>
-      </div>
+<dialog data-autoshow id="dlg-leaderboard" data-role="leaderboard">
+  <div class="modal-card">
+    <form method="dialog"><button class="modal-x" aria-label="Close">×</button></form>
+    <h2>Leaderboard</h2>
+    <p class="modal-subtle">Top players by total score.</p>
+    <hr class="modal-divider" />
+    {% set rows = leaders|default([]) %}
+    {% if rows and rows|length > 0 %}
+      <ol class="ol-plain">
+        {% for p in rows %}
+          <li>
+            <strong>{{ p.name|default("Player") }}</strong>
+            — {{ p.score|default(0) }} pts
+            {% if p.games %}<span class="modal-subtle"> ({{ p.games }} games)</span>{% endif %}
+          </li>
+        {% endfor %}
+      </ol>
+    {% else %}
+      <p class="modal-subtle">No scores yet. Be the first!</p>
+    {% endif %}
+    <div class="modal-actions">
+      <form method="dialog"><button class="btn btn-primary">Close</button></form>
     </div>
   </div>
-</div>
+</dialog>

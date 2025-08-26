@@ -1,185 +1,204 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
   <title>Vocalist</title>
 
-  <!-- Bootstrap 5 -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-  <!-- htmx -->
-  <script src="https://unpkg.com/htmx.org@1.9.12" defer></script>
-  <!-- Supabase bootstrap (early) -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script>
-    // Injected by FastAPI
-    window.SUPABASE_URL  = {{ supabase_url|tojson|safe }};
-    window.SUPABASE_ANON = {{ supabase_anon_key|tojson|safe }};
+<style>
+  :root{
+    --ink:#0f172a; --ink-2:#475569; --muted:#64748b; --accent:#0E7C86; --card:#fff;
+    --line:#e7edf3; --shadow:0 20px 60px rgba(2,6,23,.15); --radius:18px;
+  }
+  body{margin:0;color:var(--ink);background:#fff;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Inter,Roboto,Arial}
+  .container{max-width:1100px;margin:0 auto;padding:16px}
 
-    // Create the client ASAP so the magic-link callback can be handled
-    window.sb = (window.SUPABASE_URL && window.SUPABASE_ANON && window.supabase)
-      ? supabase.createClient(window.SUPABASE_URL, window.SUPABASE_ANON)
-      : null;
+  /* Navbar */
+  .navbar{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);z-index:20}
+  .nav-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0}
+  .brand{font-weight:800;letter-spacing:.08em}
+  .nav-right{display:flex;align-items:center;gap:18px}
 
-    // Optional: log state changes so you can see SIGNED_IN after clicking the email link
-    window.sb?.auth.onAuthStateChange((event, session) => {
-      console.log('[auth]', event, !!session, session?.user?.email);
-    });
+  /* Make buttons and spans render identically */
+  button.nav-link{font: inherit;}
+  .nav-link{
+    background:none;border:0;padding:2px 0;cursor:pointer;
+    color:var(--ink-2);opacity:.8;font-weight:600;letter-spacing:.06em;
+    font-size:14px; line-height:1.2;  /* explicit size so #navUser matches */
+  }
+  .nav-link:hover{opacity:1}
+  .nav-link:focus{outline:none}
 
-    console.log('[boot]', 'url=', window.SUPABASE_URL, 'anon len=', (window.SUPABASE_ANON||'').length, 'sb=', !!window.sb);
-  </script>
+  /* Buttons (page uses these too) */
+  .btn{border:1px solid var(--line);border-radius:12px;padding:10px 16px;background:#fff;cursor:pointer}
+  .btn-primary{background:var(--accent);color:#fff;border:0}
+  .btn-ghost{background:#fff;color:var(--ink-2)}
+
+  /* Dialogs — minimal, calm */
+  dialog{border:0;border-radius:24px;box-shadow:var(--shadow);padding:0;background:transparent}
+  dialog::backdrop{background:rgba(2,6,23,.35)}
+  .modal-card{position:relative;background:var(--card);border:1px solid var(--line);border-radius:24px;padding:22px 22px 18px;min-width:320px;max-width:720px}
+  .modal-card h2{margin:0 0 4px;font-size:20px;letter-spacing:.01em}
+  .modal-subtle{color:var(--muted);margin:2px 0 10px}
+  .modal-divider{height:1px;background:var(--line);margin:10px 0 12px;border:0}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
+  .modal-x{position:absolute;top:8px;right:8px;background:transparent;border:0;font-size:20px;line-height:1;border-radius:10px;cursor:pointer;opacity:.55;padding:6px}
+  .modal-x:hover{opacity:1;background:#f8fafc}
+
+  /* Table + lists inside modals */
+  .tbl{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid var(--line);border-radius:14px}
+  .tbl th,.tbl td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:14px}
+  .tbl th{background:#fbfdff;text-align:left;color:var(--muted);font-weight:700}
+  .tbl tr:last-child td{border-bottom:0}
+  .ol-plain{margin:8px 0 0 18px}
+  .ol-plain li{margin:6px 0}
+
+  /* Utility */
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+</style>
 
 </head>
-<body class="bg-light">
-  <nav class="navbar bg-body-tertiary border-bottom">
-    <div class="container">
-      <a class="navbar-brand fw-bold" href="/">Vocalist</a>
-      <span class="badge text-bg-secondary ms-auto" id="status">checking…</span>
-    </div>
-  </nav>
 
-  <main class="container py-4">
+<body data-supabase-url="{{ SUPABASE_URL|default('') }}"
+      data-supabase-anon="{{ SUPABASE_ANON|default('') }}">
+
+  <!-- NAV -->
+  <header class="navbar">
+    <div class="container nav-inner">
+      <div class="brand">Vocalist</div>
+      <nav class="nav-right">
+        <button class="nav-link" hx-get="/my-stats"    hx-target="#modalHost" hx-swap="beforeend">Stats</button>
+        <button class="nav-link" hx-get="/history"     hx-target="#modalHost" hx-swap="beforeend">History</button>
+        <button class="nav-link" hx-get="/leaderboard" hx-target="#modalHost" hx-swap="beforeend">Leaderboard</button>
+
+        <button class="nav-link" id="authLoginBtn">Log in</button>
+        <button class="nav-link" id="authLogoutBtn" style="display:none">Log out</button>
+        <span class="nav-link" id="navUser" style="display:none;cursor:default"></span>
+      </nav>
+    </div>
+  </header>
+
+  <!-- PAGE -->
+  <main class="container" id="page">
     {% block content %}{% endblock %}
   </main>
 
-  <div class="toast-container position-fixed top-0 end-0 p-3" id="toasts"></div>
+  <!-- Host for HTMX-loaded dialogs (only newest opens) -->
+  <div id="modalHost"></div>
 
+  <!-- AUTH DIALOG -->
+  <dialog id="authDialog">
+    <div class="modal-card">
+      <form method="dialog"><button class="modal-x" aria-label="Close">×</button></form>
+      <h2>Sign in</h2>
+      <p class="modal-subtle">We’ll email you a magic link.</p>
+      <hr class="modal-divider" />
+      <label class="sr-only" for="authEmailInput">Email</label>
+      <input id="authEmailInput" type="email" placeholder="you@example.com"
+             style="width:100%;padding:12px 14px;border-radius:12px;border:1px solid var(--line);outline:none;margin-bottom:10px" />
+      <div id="authMsg" class="modal-subtle" aria-live="polite"></div>
+      <div class="modal-actions">
+        <button id="authCloseBtn" class="btn btn-ghost" type="button">Close</button>
+        <button id="authSendBtn"  class="btn btn-primary" type="button">Send link</button>
+      </div>
+    </div>
+  </dialog>
+
+  <!-- Scripts / logic unchanged (auth, HTMX, modalHost, etc.) -->
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script>
-    // expose env to every page (safe-JSON encoded)
-    window.SUPABASE_URL  = {{ supabase_url|tojson|safe }};
-    window.SUPABASE_ANON = {{ supabase_anon_key|tojson|safe }};
-    console.log('[boot] SUPABASE_URL=', window.SUPABASE_URL, 'ANON len=', (window.SUPABASE_ANON||'').length);
-  </script>
+    const SUPABASE_URL  = document.body.dataset.supabaseUrl || "";
+    const SUPABASE_ANON = document.body.dataset.supabaseAnon || "";
 
-  <script>
-    // Make them globally available on every page
-    window.SUPABASE_URL  = {{ supabase_url|tojson|safe }};
-    window.SUPABASE_ANON = {{ supabase_anon_key|tojson|safe }};
-  </script>
-
-  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-  <script>
-  (function () {
-    const root = document.getElementById('toasts');
-    if (!root || !window.bootstrap) return;
-
-    function showToast(payload) {
-      const msg = typeof payload === 'string' ? payload : (payload && payload.message) || '';
-      if (!msg) return;
-
-      const wrap = document.createElement('div');
-      wrap.className = 'toast align-items-center text-bg-dark border-0';
-      wrap.role = 'status'; wrap.ariaLive = 'polite'; wrap.ariaAtomic = 'true';
-      wrap.innerHTML = `
-        <div class="d-flex">
-          <div class="toast-body">${msg}</div>
-          <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
-        </div>`;
-      root.appendChild(wrap);
-
-      const t = new bootstrap.Toast(wrap, { delay: 1500 });
-      t.show();
-      wrap.addEventListener('hidden.bs.toast', () => wrap.remove());
-    }
-
-    // Listen for htmx-triggered custom events from the server
-    document.body.addEventListener('toast', (e) => showToast(e.detail));
-  })();
-</script>
-
-  <script>
-    // Health badge
-    fetch('/health')
-      .then(r => r.json())
-      .then(d => document.getElementById('status').textContent = d.status ?? 'unknown')
-      .catch(() => document.getElementById('status').textContent = 'error');
-
-    // --- Realtime STT → post final words to /input and update #word-list via htmx ---
-(function () {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    const $status = document.getElementById('stt-status');
-    const $start  = document.getElementById('btn-start');
-    const $stop   = document.getElementById('btn-stop');
-    const $live   = document.getElementById('live-transcript');
-
-    if (!$start || !$stop) return; // page without STT panel
-
-    if (!SpeechRecognition) {
-      if ($status) $status.textContent = 'speech recognition not supported';
-      if ($start)  $start.disabled = true;
-      return;
-    }
-
-    const recog = new SpeechRecognition();
-    recog.lang = 'en-AU';
-    recog.interimResults = true;
-    recog.continuous = true;
-    recog.maxAlternatives = 1;
-
-    function wordsFrom(text) {
-      return text
-        .toLowerCase()
-        .replace(/[^a-z\u00C0-\u024f\s'-]/g, ' ')
-        .trim()
-        .split(/\s+/)
-        .filter(Boolean);
-    }
-
-    function postWord(word) {
-      htmx.ajax('POST', '/input', {
-        values: { word },
-        target: '#word-list',
-        swap: 'innerHTML'
-      });
-    }
-
-    let running = false;
-
-    recog.onstart = () => {
-      running = true;
-      if ($status) $status.textContent = 'listening…';
-      if ($start)  $start.disabled = true;
-      if ($stop)   $stop.disabled = false;
-    };
-    recog.onerror = (e) => {
-      if ($status) $status.textContent = 'error: ' + (e.error || 'unknown');
-    };
-    recog.onend = () => {
-      running = false;
-      if ($status) $status.textContent = 'stopped';
-      if ($start)  $start.disabled = false;
-      if ($stop)   $stop.disabled = true;
-    };
-    recog.onresult = (evt) => {
-      let interim = '', finals = [];
-      for (let i = evt.resultIndex; i < evt.results.length; i++) {
-        const r = evt.results[i];
-        const t = r[0].transcript;
-        if (r.isFinal) finals.push(t);
-        else interim += t + ' ';
+    function haveKeys(){ return !!(SUPABASE_URL && SUPABASE_ANON); }
+    function initSB(){
+      if (!haveKeys()) return null;
+      if (!window.sb || !window.sb.auth || !String(window.sb?.supabaseUrl).startsWith(SUPABASE_URL)) {
+        window.sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
       }
-      if ($live) $live.textContent = interim.trim();
-      finals.flatMap(wordsFrom).forEach(postWord);
-    };
+      return window.sb;
+    }
+    initSB();
 
-    // Public controls (so server can start/stop the mic)
-    function startMic() { try { if (!running) recog.start(); } catch (e) {} }
-    function stopMic()  { try { if (running)  recog.stop();  } catch (e) {} }
+    async function getSessionSafe(){
+      const sb = initSB(); if (!sb?.auth) return null;
+      const { data:{ session } } = await sb.auth.getSession(); return session || null;
+    }
+    async function syncSupabaseToken(){
+      const session = await getSessionSafe();
+      window.__supabase_token = session?.access_token || null;
+      toggleAuthUI(!!session, session?.user);
+    }
+    function toggleAuthUI(authed, user){
+      const loginBtn  = document.getElementById('authLoginBtn');
+      const logoutBtn = document.getElementById('authLogoutBtn');
+      const userEl    = document.getElementById('navUser');
+      if (loginBtn)  loginBtn.style.display  = authed ? 'none' : '';
+      if (logoutBtn) logoutBtn.style.display = authed ? '' : 'none';
+      if (userEl) { userEl.style.display = authed ? '' : 'none'; userEl.textContent = authed ? (user?.email || 'Signed in') : ''; }
+    }
 
-    window.vocalistMic = { start: startMic, stop: stopMic };
-
-    // Buttons still work
-    $start.addEventListener('click', startMic);
-    $stop .addEventListener('click', stopMic);
-
-    // Listen for server-triggered mic events via htmx HX-Trigger
-    document.body.addEventListener('mic', (e) => {
-      const action = e.detail && e.detail.action;
-      if (action === 'start') startMic();
-      if (action === 'stop')  stopMic();
+    syncSupabaseToken();
+    window.sb?.auth?.onAuthStateChange((_evt, session) => {
+      window.__supabase_token = session?.access_token || null;
+      toggleAuthUI(!!session, session?.user);
     });
-  })();
+
+    // Attach Authorization to HTMX
+    document.body.addEventListener('htmx:configRequest', async (evt) => {
+      if (!window.__supabase_token) await syncSupabaseToken();
+      const t = window.__supabase_token; if (t) evt.detail.headers['Authorization'] = 'Bearer ' + t;
+    });
+
+    // Only open the newly inserted dialog in #modalHost; remove on close
+    const modalHost = document.getElementById('modalHost');
+    document.body.addEventListener('htmx:afterSwap', (evt) => {
+      if (evt.detail.target !== modalHost) return;
+      const dlg = modalHost.lastElementChild;
+      if (dlg && dlg.nodeName === 'DIALOG' && dlg.hasAttribute('data-autoshow')) { try { dlg.showModal(); } catch {} }
+    });
+    modalHost.addEventListener('close', (e) => { const dlg = e.target; if (dlg?.nodeName === 'DIALOG') dlg.remove(); }, true);
+
+    // Login/Logout
+    document.getElementById('authLoginBtn')?.addEventListener('click', ()=> document.getElementById('authDialog')?.showModal());
+    document.getElementById('authCloseBtn')?.addEventListener('click', ()=> document.getElementById('authDialog')?.close());
+    document.getElementById('authSendBtn')?.addEventListener('click', async () => {
+      const emailEl=document.getElementById('authEmailInput'), msgEl=document.getElementById('authMsg');
+      const email=(emailEl.value||'').trim();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ msgEl.textContent='Please enter a valid email.'; emailEl.focus(); return; }
+      if (!haveKeys()){ msgEl.textContent='Auth not configured (server didn’t pass SUPABASE_URL/ANON).'; return; }
+      msgEl.textContent='Sending…'; document.getElementById('authSendBtn').disabled=true;
+      try{ const { error } = await sb.auth.signInWithOtp({ email, options:{ emailRedirectTo: window.location.origin } });
+           msgEl.textContent = error ? ('Error: '+error.message) : 'Check your inbox for the magic link.'; }
+      catch(e){ msgEl.textContent='Error: '+(e?.message||'unknown'); }
+      finally{ document.getElementById('authSendBtn').disabled=false; }
+    });
+    document.getElementById('authLogoutBtn')?.addEventListener('click', async ()=>{ try{ await sb.auth.signOut(); } finally{ window.__supabase_token=null; toggleAuthUI(false,null); } });
+
+    // Helper for pages
+    window.ensureAuth = async ({force=false}={}) => {
+      const session = await getSessionSafe();
+      if (!session && force) document.getElementById('authDialog')?.showModal();
+      return session;
+    };
+    // Fetch wrapper
+    (function wrapFetch(){
+      const _fetch = window.fetch.bind(window);
+      window.fetch = async (input, init={})=>{
+        const url=(typeof input==='string')?input:(input?.url||'');
+        const sameOrigin = !/^https?:\/\//i.test(url) || url.startsWith(location.origin);
+        if (sameOrigin) {
+          if (!window.__supabase_token) await syncSupabaseToken();
+          init.headers = new Headers(init.headers||{});
+          if (window.__supabase_token && !init.headers.has('Authorization'))
+            init.headers.set('Authorization','Bearer '+window.__supabase_token);
+        }
+        return _fetch(input, init);
+      };
+    })();
   </script>
+
+  {% block extra_scripts %}{% endblock %}
 </body>
 </html>

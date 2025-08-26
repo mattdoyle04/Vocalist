@@ -1,34 +1,25 @@
-<div class="modal fade show" style="display:block;" tabindex="-1" aria-modal="true" role="dialog">
-  <div class="modal-dialog modal-dialog-centered modal-lg">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Stats — {{ name }}</h5>
-        <button type="button" class="btn-close" aria-label="Close" onclick="this.closest('.modal').remove()"></button>
+<dialog data-autoshow id="dlg-my-stats">
+  <div class="modal-card">
+    <form method="dialog"><button class="modal-x" aria-label="Close">×</button></form>
+    <h2>Your stats</h2>
+    <p class="modal-subtle">Lifetime performance.</p>
+    <hr class="modal-divider" />
+    {% set s = stats|default({}) %}
+    {% if s and (s.games_played|default(0)) > 0 %}
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:8px 0">
+        <div><div class="modal-subtle">GAMES</div><div style="font-weight:800">{{ s.games_played }}</div></div>
+        <div><div class="modal-subtle">TOTAL</div><div style="font-weight:800">{{ s.total_score }}</div></div>
+        <div><div class="modal-subtle">AVG</div><div style="font-weight:800">{{ s.avg_score|round(1) }}</div></div>
+        <div><div class="modal-subtle">BEST</div><div style="font-weight:800">{{ s.best_score }}</div></div>
+        <div><div class="modal-subtle">VALID</div><div style="font-weight:800">{{ s.valid_words }}</div></div>
+        <div><div class="modal-subtle">OFF THEME</div><div style="font-weight:800">{{ s.off_theme|default(0) }}</div></div>
       </div>
-      <div class="modal-body">
-        <div class="card">
-          <h2>ALL-TIME</h2>
-          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">
-            <div class="card"><div>TOTAL GAMES</div><div style="font-weight:800;font-size:24px">{{ stats.total_games }}</div></div>
-            <div class="card"><div>TOTAL VALID</div><div style="font-weight:800;font-size:24px">{{ stats.total_valid }}</div></div>
-            <div class="card"><div>AVG ACCURACY</div><div style="font-weight:800;font-size:24px">{{ stats.avg_accuracy }}%</div></div>
-            <div class="card"><div>AVG WPM</div><div style="font-weight:800;font-size:24px">{{ stats.avg_wpm }}</div></div>
-            <div class="card"><div>AVG WORD LEN</div><div style="font-weight:800;font-size:24px">{{ stats.avg_word_len }}</div></div>
-            <div class="card"><div>BEST DAY SCORE</div><div style="font-weight:800;font-size:24px">{{ stats.best_day_score }}</div></div>
-            <div class="card"><div>CURRENT STREAK</div><div style="font-weight:800;font-size:24px">{{ stats.current_streak }}</div></div>
-            <div class="card"><div>LONGEST STREAK</div><div style="font-weight:800;font-size:24px">{{ stats.longest_streak }}</div></div>
-            <div class="card" style="grid-column:1/-1">
-              <div>LONGEST SCRABBLE WORD</div>
-              <div style="font-weight:800;font-size:20px">
-                {% if stats.best_scrabble_word %}{{ stats.best_scrabble_word }} ({{ stats.best_scrabble_points }}){% else %}—{% endif %}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-primary" onclick="this.closest('.modal').remove()">Close</button>
-      </div>
+      <div class="modal-subtle">Last played: {{ s.last_played|default("—") }}</div>
+    {% else %}
+      <p class="modal-subtle">No games yet. Play a round to see your stats.</p>
+    {% endif %}
+    <div class="modal-actions">
+      <form method="dialog"><button class="btn btn-primary">Close</button></form>
     </div>
   </div>
-</div>
+</dialog>
