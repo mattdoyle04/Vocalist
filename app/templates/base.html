@@ -162,13 +162,46 @@
     });
 
     // Attach Authorization to ALL HTMX requests
-    document.body.addEventListener('htmx:configRequest', async (evt) => {
-      if (!window.__supabase_token) await syncSupabaseToken();
+    document.body.addEventListener('htmx:configRequest', (evt) => {
       const t = window.__supabase_token;
       if (t) evt.detail.headers['Authorization'] = 'Bearer ' + t;
     });
 
+    // Update hx-headers on nav buttons so future clicks always carry the token
+    function updateHxAuthHeaders() {
+      const t = window.__supabase_token;
+      const hdr = t ? JSON.stringify({ Authorization: 'Bearer ' + t }) : null;
+      document.querySelectorAll('button.nav-link[hx-get]').forEach(btn => {
+        if (hdr) btn.setAttribute('hx-headers', hdr);
+        else btn.removeAttribute('hx-headers');
+      });
+    }
+
+    // Call whenever auth changes
+    (async () => { await syncSupabaseToken(); updateHxAuthHeaders(); })();
+    window.sb?.auth?.onAuthStateChange((_evt, session) => {
+      window.__supabase_token = session?.access_token || null;
+      toggleAuthUI(!!session, session?.user);
+      updateHxAuthHeaders();
+    });
+
+    // If not signed in, intercept nav clicks & show login instead of sending a 401 request
+    function requireAuthFor(selector) {
+      const el = document.querySelector(selector);
+      if (!el) return;
+      el.addEventListener('click', async (e) => {
+        const session = await getSessionSafe();
+        if (!session) {
+          e.preventDefault(); e.stopPropagation();
+          document.getElementById('authDialog')?.showModal();
+        }
+      }, { capture: true });
+    }
+    requireAuthFor('button.nav-link[hx-get="/my-stats"]');
+    requireAuthFor('button.nav-link[hx-get="/history"]');
+    requireAuthFor('button.nav-link[hx-get="/leaderboard"]');
     // Only open the newly inserted dialog in #modalHost; remove on close
+    
     const modalHost = document.getElementById('modalHost');
     document.body.addEventListener('htmx:afterSwap', (evt) => {
       if (evt.detail.target !== modalHost) return;
