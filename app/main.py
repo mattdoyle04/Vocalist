@@ -14,12 +14,13 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 
-# --- DB (optional; used only if DATABASE_URL is set) ---
+# SQLAlchemy
 from sqlalchemy import (
     create_engine, select, Column, Integer, Text, DateTime, Date, ForeignKey, func, text as sqla_text
 )
 from sqlalchemy.orm import sessionmaker, declarative_base, Session as SASession
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.pool import NullPool
 
 try:
     from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -27,6 +28,14 @@ try:
 except Exception:
     HAS_PG = False
 
+# --- Force IPv4 for outbound connects (avoid IPv6 AAAA resolution on some hosts) ---
+import socket as _socket
+__orig_getaddrinfo = _socket.getaddrinfo
+def __ipv4_first_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    res = __orig_getaddrinfo(host, port, family, type, proto, flags)
+    v4 = [r for r in res if r[0] == _socket.AF_INET]
+    return v4 or res
+_socket.getaddrinfo = __ipv4_first_getaddrinfo
 
 # ------------------------------------------------------
 # App & config
@@ -95,7 +104,6 @@ def require_user(request: Request) -> Dict[str, Any]:
             raise HTTPException(status_code=401, detail="Wrong issuer")
     return payload
 
-
 # ------------------------------------------------------
 # DB setup (optional)
 # ------------------------------------------------------
@@ -107,7 +115,12 @@ SessionLocal = None
 engine = None
 
 if DATABASE_URL:
-    engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        poolclass=NullPool,   # friendlier to pgbouncer (Supabase 6543)
+        future=True,
+    )
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
 def _uuid_type():
@@ -138,7 +151,6 @@ class GameRun(Base):
 def create_db_and_tables():
     if engine:
         Base.metadata.create_all(bind=engine)
-
 
 # ------------------------------------------------------
 # Themes / word validation (robust file loading)
@@ -188,7 +200,6 @@ def check_word_server(word: str, letter: str, theme: str) -> Dict[str, Any]:
     theme_words = load_theme_words(theme)
     theme_ok = w in theme_words if theme_words else False
     return {"ok": True, "theme": theme, "theme_ok": theme_ok, "word": w, "theme_mode": "list"}
-
 
 # ------------------------------------------------------
 # Letter selection & scoring
@@ -258,7 +269,6 @@ def advance_round():
     seed = _hash32("L|" + key) ^ _hash32(f"R|{app.state.round_idx}")
     app.state.letter_char = _weighted_choice(seed, LETTERS_ORDER, weights)
 
-
 # ------------------------------------------------------
 # Startup
 # ------------------------------------------------------
@@ -267,7 +277,6 @@ def _on_start():
     if AUTO_CREATE_TABLES and engine:
         create_db_and_tables()
     seed_indices_for_today()
-
 
 # ------------------------------------------------------
 # Helpers for stats/history/leaderboard
@@ -366,7 +375,6 @@ def build_leaderboard(db: SASession, limit: int = 10) -> List[Dict[str, Any]]:
         })
     return leaders
 
-
 # ------------------------------------------------------
 # Routes: pages
 # ------------------------------------------------------
@@ -390,32 +398,40 @@ def my_stats(request: Request, user: Dict[str, Any] = Depends(require_user)):
     ctx = {"request": request, "stats": {}}
     if SessionLocal is None:
         return _safe_dialog(request, "_my_stats.html", ctx)
-    with SessionLocal() as db:
-        player = get_player_by_user(db, user)
-        if player:
-            ctx["stats"] = build_stats_for_player(db, player.id)
-        return _safe_dialog(request, "_my_stats.html", ctx)
+    try:
+        with SessionLocal() as db:
+            player = get_player_by_user(db, user)
+            if player:
+                ctx["stats"] = build_stats_for_player(db, player.id)
+    except SQLAlchemyError:
+        pass
+    return _safe_dialog(request, "_my_stats.html", ctx)
 
 @app.get("/history", response_class=HTMLResponse)
 def history(request: Request, user: Dict[str, Any] = Depends(require_user)):
     ctx = {"request": request, "history": []}
     if SessionLocal is None:
         return _safe_dialog(request, "_history.html", ctx)
-    with SessionLocal() as db:
-        player = get_player_by_user(db, user)
-        if player:
-            ctx["history"] = build_history_for_player(db, player.id, limit=30)
-        return _safe_dialog(request, "_history.html", ctx)
+    try:
+        with SessionLocal() as db:
+            player = get_player_by_user(db, user)
+            if player:
+                ctx["history"] = build_history_for_player(db, player.id, limit=30)
+    except SQLAlchemyError:
+        pass
+    return _safe_dialog(request, "_history.html", ctx)
 
 @app.get("/leaderboard", response_class=HTMLResponse)
 def leaderboard(request: Request, user: Dict[str, Any] = Depends(require_user)):
     ctx = {"request": request, "leaders": []}
     if SessionLocal is None:
         return _safe_dialog(request, "_leaderboard.html", ctx)
-    with SessionLocal() as db:
-        ctx["leaders"] = build_leaderboard(db, limit=10)
-        return _safe_dialog(request, "_leaderboard.html", ctx)
-
+    try:
+        with SessionLocal() as db:
+            ctx["leaders"] = build_leaderboard(db, limit=10)
+    except SQLAlchemyError:
+        pass
+    return _safe_dialog(request, "_leaderboard.html", ctx)
 
 # ------------------------------------------------------
 # Routes: api
@@ -523,7 +539,6 @@ def api_submit_run(
         "base_points": base_points_per_word,
     })
 
-
 # ------------------------------------------------------
 # Debug: sanity checks (keep during dev)
 # ------------------------------------------------------
@@ -563,3 +578,14 @@ def debug_check(word: str):
     res = check_word_server(word, current_letter(), current_theme())
     res.update({"server_letter": current_letter(), "server_theme": current_theme()})
     return JSONResponse(res)
+
+@app.get("/debug/db", response_class=JSONResponse)
+def debug_db():
+    if not engine:
+        return {"connected": False, "why": "no DATABASE_URL"}
+    try:
+        with engine.connect() as conn:
+            conn.execute(sqla_text("select 1"))
+        return {"connected": True}
+    except Exception as e:
+        return JSONResponse({"connected": False, "error": str(e)}, status_code=500)
