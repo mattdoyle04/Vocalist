@@ -1,7 +1,6 @@
-# app/main.py
 import os, json, base64, secrets, logging, socket as _socket
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone, date
 from typing import Any, Dict, Optional, Set, List
 from urllib.parse import urlencode
 from urllib.request import Request as URLRequest, urlopen
@@ -88,7 +87,6 @@ class SupaREST:
             "accept": "application/json",
             "apikey": self.key,
             "Authorization": f"Bearer {self.key}",
-            # Explicit schema to avoid rare “permission denied” when default profile isn’t public
             "Accept-Profile": "public",
             "Content-Profile": "public",
             "Content-Type": "application/json",
@@ -281,7 +279,7 @@ def sb_insert_game_run(player_id: int, letter: str, theme: str, duration: int,
     }
     SB.insert("game_run", obj)
 
-def sb_history_for_player(pid: int, limit: int=30) -> List[Dict[str,Any]]:
+def sb_history_for_player(pid: int, limit: int=1000) -> List[Dict[str,Any]]:
     if not SB: return []
     rows = SB.get("/game_run", {
         "select": "play_date,letter,theme,score,duration,words_json,created_at",
@@ -303,36 +301,65 @@ def sb_history_for_player(pid: int, limit: int=30) -> List[Dict[str,Any]]:
         })
     return out
 
+def _compute_streak(hist: List[Dict[str,Any]]) -> int:
+    """Consecutive daily play streak. If played today, streak is up to today;
+    otherwise it counts back from the most recent play date."""
+    if not hist:
+        return 0
+    # Build a set of dates you played
+    played: Set[date] = set()
+    for h in hist:
+        try:
+            d = datetime.strptime(h["play_date"][:10], "%Y-%m-%d").date()
+            played.add(d)
+        except Exception:
+            continue
+    if not played:
+        return 0
+    today = datetime.now(TZ).date()
+    anchor = today if today in played else max(played)
+    streak = 0
+    d = anchor
+    one = timedelta(days=1)
+    while d in played:
+        streak += 1
+        d -= one
+    return streak
+
 def sb_stats_for_player(pid: int) -> Dict[str,Any]:
     hist = sb_history_for_player(pid, limit=1000)
     games = len(hist)
     total = sum(h["score"] for h in hist)
     best  = max([h["score"] for h in hist], default=0)
-    last  = max([h["play_date"] for h in hist], default="—") if games else "—"
-    valid_approx = total  # crude (base_points = 1 assumption)
+    avg   = (total/games) if games else 0.0
+    streak = _compute_streak(hist)
     return {
         "games_played": games,
+        "streak": streak,
         "total_score": total,
-        "avg_score": (total/games) if games else 0.0,
+        "avg_score": avg,
         "best_score": best,
-        "valid_words": valid_approx,
+        # kept for backwards-compatibility; not shown in UI now
+        "valid_words": total,
         "off_theme": 0,
-        "last_played": last
+        "last_played": max([h["play_date"] for h in hist], default="—") if games else "—",
     }
 
 def sb_leaderboard(limit:int=10) -> List[Dict[str,Any]]:
     if not SB: return []
     rows = SB.get("/game_run", {"select":"player_id,score", "limit":"5000"}) or []
     totals: Dict[int,int] = {}
+    counts: Dict[int,int] = {}
     for r in rows:
         pid = int(r.get("player_id") or 0)
         totals[pid] = totals.get(pid, 0) + int(r.get("score") or 0)
+        counts[pid] = counts.get(pid, 0) + 1
     top = sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[:limit]
     if not top: return []
     ids = ",".join(str(pid) for pid,_ in top)
     plist = SB.get("/player", {"select":"id,name","id":f"in.({ids})"}) or []
     name_by_id = {int(p["id"]): (p.get("name") or "Player") for p in plist}
-    leaders = [{"name": name_by_id.get(pid,"Player"), "score": total, "games": None} for pid,total in top]
+    leaders = [{"name": name_by_id.get(pid,"Player"), "score": total, "games": counts.get(pid, 0)} for pid,total in top]
     return leaders
 
 # ---------------- Pages ----------------
@@ -470,7 +497,6 @@ def debug_db():
 
 @app.get("/debug/rest-auth", response_class=JSONResponse)
 def debug_rest_auth():
-    """Diagnose the SUPABASE_SERVICE_ROLE JWT without exposing it."""
     key = SUPABASE_SERVICE_ROLE
     info = {"present": bool(key)}
     try:

@@ -8,13 +8,11 @@
     {% if s and (s.games_played|default(0)) > 0 %}
       <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:8px 0">
         <div><div class="modal-subtle">GAMES</div><div style="font-weight:800">{{ s.games_played }}</div></div>
+        <div><div class="modal-subtle">STREAK</div><div style="font-weight:800">{{ s.streak }}</div></div>
         <div><div class="modal-subtle">TOTAL</div><div style="font-weight:800">{{ s.total_score }}</div></div>
         <div><div class="modal-subtle">AVG</div><div style="font-weight:800">{{ s.avg_score|round(1) }}</div></div>
         <div><div class="modal-subtle">BEST</div><div style="font-weight:800">{{ s.best_score }}</div></div>
-        <div><div class="modal-subtle">VALID</div><div style="font-weight:800">{{ s.valid_words }}</div></div>
-        <div><div class="modal-subtle">OFF THEME</div><div style="font-weight:800">{{ s.off_theme|default(0) }}</div></div>
       </div>
-      <div class="modal-subtle">Last played: {{ s.last_played|default("—") }}</div>
     {% else %}
       <p class="modal-subtle">No games yet. Play a round to see your stats.</p>
     {% endif %}

@@ -2,6 +2,7 @@
 {% block content %}
 
 <div id="vocalist-app">
+  <!-- Today / header section (unchanged) -->
   <section id="todaySection" class="section today">
     <div class="compact-controls">
       <div id="timerMini" class="timer-mini" aria-live="polite">00:30</div>
@@ -16,6 +17,7 @@
     </div>
   </section>
 
+  <!-- Composer -->
   <section class="section composer">
     <div id="modePill" class="mode-pill" style="display:none">VOICE MODE</div>
     <div id="startPlaceholder" class="placeholder-letter" aria-hidden="true" style="display:none">?</div>
@@ -24,8 +26,10 @@
     <div id="tinyHint" class="tiny-hint"></div>
   </section>
 
+  <!-- Accepted words mount -->
   <section id="acceptedSectionAnchor"></section>
 
+  <!-- Bottom bar -->
   <footer class="bottombar">
     <div class="hint">PRESS START, THEN TYPE OR TAP 🎤 TO SPEAK…</div>
     <div class="actions">
@@ -34,6 +38,7 @@
     </div>
   </footer>
 
+  <!-- Summary modal (removed Off Theme & Duration tiles) -->
   <dialog id="summaryModal">
     <div class="modal-card">
       <h2>Time’s up</h2>
@@ -42,9 +47,7 @@
         <div><div class="stat-label">LETTER</div><div class="stat-value" id="sumLetter">—</div></div>
         <div><div class="stat-label">THEME</div><div class="stat-value" id="sumTheme">—</div></div>
         <div><div class="stat-label">VALID</div><div class="stat-value" id="sumValid">0</div></div>
-        <div><div class="stat-label">OFF THEME</div><div class="stat-value" id="sumOff">0</div></div>
         <div><div class="stat-label">WORDS</div><div class="stat-value" id="sumWords">0</div></div>
-        <div><div class="stat-label">DURATION</div><div class="stat-value" id="sumDur">00:00</div></div>
         <div><div class="stat-label">SCORE</div><div class="stat-value" id="sumScore">…</div></div>
         <div><div class="stat-label">BONUS/WORD</div><div class="stat-value" id="sumBonus">+0</div></div>
       </div>
@@ -60,6 +63,7 @@
     </div>
   </dialog>
 
+  <!-- Styles (same look as before) -->
   <style>
     :root{ --section-gap:28px; --bg:#FFFFFF; --ink:#1A202C; --ink-2:#4A5568; --card:#FFF; --accent:#0E7C86; --shadow:0 8px 24px rgba(26,32,44,.06); --radius:24px }
     .section{ position:relative; padding:18px; background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); margin:0 auto var(--section-gap) auto; }
@@ -84,27 +88,24 @@
     .bottombar{position:sticky;bottom:0;background:linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,255,255,1) 24%,rgba(255,255,255,1) 100%);padding:24px 0;border-top:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center;gap:12px}
     .bottombar .hint{font-size:12px;color:var(--ink-2);letter-spacing:.06em}
     .actions{display:flex;gap:10px}
-    .stat-grid{margin:10px 0 8px;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
-    @media (max-width: 720px){ .stat-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); } }
+    .stat-grid{margin:10px 0 8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+    @media (min-width: 640px){ .stat-grid{ grid-template-columns: repeat(6, minmax(0,1fr)); } }
     .stat-label{font-size:11px;letter-spacing:.08em;color:#64748b}
     .stat-value{font-weight:800;font-size:18px;letter-spacing:.04em}
     .summary-words{margin-top:8px}
   </style>
 
   <script>
-    // --- Tiny auth shim so START works even if base.html didn't define ensureAuth ---
+    // --- Auth shim (unchanged) ---
     if (typeof window.ensureAuth !== 'function') {
       window.ensureAuth = async function ensureAuth(options = {}) {
         const force = !!options.force;
         try {
           if (window.sb?.auth?.getSession) {
             const { data:{ session } } = await window.sb.auth.getSession();
-            if (session?.access_token) {
-              window.__supabase_token = session.access_token; // ensure fetch() wrapper can attach it
-              return session;
-            }
+            if (session?.access_token) { window.__supabase_token = session.access_token; return session; }
           }
-        } catch (e) { /* ignore */ }
+        } catch (e) {}
         if (window.__supabase_token) return { access_token: window.__supabase_token };
         if (force) document.getElementById('authDialog')?.showModal();
         return null;
@@ -142,8 +143,7 @@
 
     document.getElementById('startBtn').addEventListener("click", async () => {
       const session = await window.ensureAuth({ force: true });
-      if (!session) return; // login dialog opened; stop here
-      // ensure token is set for /api/submit-run later
+      if (!session) return;
       if (session.access_token) window.__supabase_token = session.access_token;
       startRound();
     });
@@ -158,7 +158,7 @@
       const dailyLetter = (document.getElementById('letterBubble').textContent||'').toLowerCase();
       if (state.words.has(w)) return fromTyping && showTinyHint("DUPLICATE");
       if (w.length < 3)      return fromTyping && showTinyHint("MIN LENGTH");
-      if (!w.startsWith(dailyLetter)) return fromTyping && showTinyHint(`MUST START “${dailyLetter.toUpperCase()}”`);
+      if (!w.startswith(dailyLetter)) return fromTyping && showTinyHint(`MUST START “${dailyLetter.toUpperCase()}”`);
       let server;
       try { const r = await fetch('/api/check-word',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ word:w })}); server = await r.json(); }
       catch { return fromTyping && showTinyHint("CHECK FAILED"); }
@@ -171,6 +171,8 @@
 
     async function syncAndRevealToday(){ await syncToday(true); const s=document.getElementById('todaySection'); if (s && s.style.display==='none') s.style.display='block'; }
 
+    function setTimer(secs){ state.remaining=secs; document.getElementById("timerMini").textContent=new Date(secs*1000).toISOString().substr(14,5); }
+
     async function startRound(){
       showStartPlaceholder(false);
       await syncAndRevealToday();
@@ -182,8 +184,6 @@
       clearInterval(state.timerId); state.timerId=setInterval(()=>{ state.remaining=Math.max(0,state.remaining-1); document.getElementById("timerMini").textContent=new Date(state.remaining*1000).toISOString().substr(14,5); if(state.remaining<=0) endRound(); },1000);
     }
 
-    function setTimer(secs){ state.remaining=secs; document.getElementById("timerMini").textContent=new Date(secs*1000).toISOString().substr(14,5); }
-
     async function endRound(){
       clearInterval(state.timerId); state.running=false; document.getElementById('finishBtn').style.display="none"; document.getElementById('startBtn').style.display="inline-block";
       const ti=document.getElementById('typeInput'); ti.disabled=true;
@@ -191,18 +191,18 @@
       const gameSeconds = Math.max(1, Math.round((Date.now()-(state.startedAt||Date.now()))/1000));
       const letter = document.getElementById('letterBubble').textContent || '—';
       const theme  = document.getElementById('themeHeading').textContent || '—';
+      // Summary tiles (no Off Theme, no Duration)
       document.getElementById('sumLetter').textContent = letter.toUpperCase();
       document.getElementById('sumTheme').textContent  = theme.toUpperCase();
       document.getElementById('sumValid').textContent  = state.onTheme.size;
-      document.getElementById('sumOff').textContent    = state.offTheme.size;
       document.getElementById('sumWords').textContent  = state.words.size;
-      document.getElementById('sumDur').textContent    = new Date(gameSeconds*1000).toISOString().substr(14,5);
       document.getElementById('sumBonus').textContent  = '+' + (window.__letterBonus||0);
       document.getElementById('sumScore').textContent  = '…';
       const list = document.getElementById('sumWordList');
       if (list){ list.innerHTML=''; Array.from(state.onTheme).sort().forEach(w=>{const s=document.createElement('span'); s.textContent=w.toUpperCase(); list.appendChild(s);}); Array.from(state.offTheme).sort().forEach(w=>{const s=document.createElement('span'); s.textContent=w.toUpperCase(); s.classList.add('off-theme'); list.appendChild(s);}); }
       document.getElementById('summaryModal').showModal();
-      window.__pendingRun = null;
+
+      // Submit to server
       const payload = { words: Array.from(state.words), inputs: state.words.size + state.invalid, duration: gameSeconds };
       const session = await window.ensureAuth({ force: true });
       if (!session) { window.__pendingRun = payload; return; }
