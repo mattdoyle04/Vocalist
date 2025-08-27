@@ -1,10 +1,10 @@
 # app/main.py
-import os, json, base64, secrets, logging
+import os, json, base64, secrets, logging, socket as _socket
 from pathlib import Path
 from datetime import datetime, timedelta, timezone, date
 from typing import Any, Dict, Optional, Set, List
 from urllib.parse import urlencode
-from urllib.request import Request, urlopen
+from urllib.request import Request as URLRequest, urlopen
 from urllib.error import HTTPError, URLError
 
 from fastapi import FastAPI, Request, Depends, Body, HTTPException
@@ -12,6 +12,14 @@ from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
+
+# ---------------- IPv4 preference (avoid IPv6-only DNS paths) ----------------
+__orig_getaddrinfo = _socket.getaddrinfo
+def __ipv4_first_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    res = __orig_getaddrinfo(host, port, family, type, proto, flags)
+    v4 = [r for r in res if r[0] == _socket.AF_INET]
+    return v4 or res
+_socket.getaddrinfo = __ipv4_first_getaddrinfo
 
 # ---------------- App & config ----------------
 load_dotenv()
@@ -77,6 +85,7 @@ class SupaREST:
 
     def _headers(self, extra: Optional[Dict[str,str]]=None) -> Dict[str,str]:
         h = {
+            "accept": "application/json",
             "apikey": self.key,
             "Authorization": f"Bearer {self.key}",
             "Content-Type": "application/json",
@@ -90,7 +99,7 @@ class SupaREST:
         url = self.base + table_or_path
         if params:
             url += "?" + urlencode(params)
-        req = Request(url, headers=self._headers())
+        req = URLRequest(url, headers=self._headers())
         try:
             with urlopen(req, timeout=10) as resp:
                 data = resp.read()
@@ -111,8 +120,8 @@ class SupaREST:
         url = self.base + "/" + table
         if params:
             url += "?" + urlencode(params)
-        req = Request(url, data=json.dumps(obj).encode("utf-8"),
-                      headers=self._headers({"Prefer": prefer}), method="POST")
+        req = URLRequest(url, data=json.dumps(obj).encode("utf-8"),
+                         headers=self._headers({"Prefer": prefer}), method="POST")
         try:
             with urlopen(req, timeout=10) as resp:
                 data = resp.read()
@@ -124,8 +133,8 @@ class SupaREST:
 
     def insert(self, table: str, obj: Dict[str, Any]) -> Any:
         url = self.base + "/" + table
-        req = Request(url, data=json.dumps(obj).encode("utf-8"),
-                      headers=self._headers(), method="POST")
+        req = URLRequest(url, data=json.dumps(obj).encode("utf-8"),
+                         headers=self._headers(), method="POST")
         try:
             with urlopen(req, timeout=10) as resp:
                 data = resp.read()
@@ -297,24 +306,19 @@ def sb_stats_for_player(pid: int) -> Dict[str,Any]:
     total = sum(h["score"] for h in hist)
     best  = max([h["score"] for h in hist], default=0)
     last  = max([h["play_date"] for h in hist], default="—") if games else "—"
-    # approx valid words (reverse score using letter bonus of each game would require joining; estimate with base 1)
-    valid_approx = 0
-    for h in hist:
-        # assume base_points=1; bonus averaged out
-        valid_approx += int(h["score"])  # crude, ok for display
+    valid_approx = total  # crude (base_points = 1 assumption)
     return {
         "games_played": games,
         "total_score": total,
         "avg_score": (total/games) if games else 0.0,
         "best_score": best,
         "valid_words": valid_approx,
-        "off_theme": 0,  # could compute if we store it in history modal separately
+        "off_theme": 0,
         "last_played": last
     }
 
 def sb_leaderboard(limit:int=10) -> List[Dict[str,Any]]:
     if not SB: return []
-    # Fetch recent runs (cap to 5000 rows) and aggregate here
     rows = SB.get("/game_run", {"select":"player_id,score", "limit":"5000"}) or []
     totals: Dict[int,int] = {}
     for r in rows:
@@ -401,17 +405,6 @@ def api_submit_run(
     payload: Dict[str, Any] = Body(...),
     user: Dict[str, Any] = Depends(require_user),
 ):
-    if not SB:
-        # Still return a score so UX continues
-        letter = current_letter()
-        theme  = current_theme()
-        words  = payload.get("words") or []
-        valid = sum(1 for w in words if check_word_server(w, letter, theme)["theme_ok"])
-        score = valid * (1 + rarity_bonus(letter))
-        logger.error("Supabase REST not configured (no SUPABASE_SERVICE_ROLE). Returning score only.")
-        return JSONResponse({"ok": True, "score": score, "valid": valid, "off_theme": 0,
-                             "letter": letter, "theme": theme, "bonus_per_word": rarity_bonus(letter)})
-
     letter = current_letter()
     theme  = current_theme()
     words  = payload.get("words") or []
@@ -422,7 +415,8 @@ def api_submit_run(
     off_theme = 0
     for w in words:
         r = check_word_server(w, letter, theme)
-        if not r["ok"]: continue
+        if not r["ok"]:
+            continue
         if r["theme_ok"]: valid += 1
         else: off_theme += 1
 
@@ -431,15 +425,18 @@ def api_submit_run(
     score = valid * (base_points + bonus)
 
     # Ensure player row then insert game_run via REST
-    try:
-        supa_uid = (user or {}).get("sub") or (user or {}).get("id")
-        player = sb_get_player_by_uid(supa_uid) or sb_upsert_player_from_user(user)
-        if player:
-            sb_insert_game_run(int(player["id"]), letter, theme, duration, score, words, inputs, off_theme)
-        else:
-            logger.error("Could not upsert/find player for uid=%s", supa_uid)
-    except Exception as e:
-        logger.exception("submit-run REST error: %s", e)
+    if SB:
+        try:
+            supa_uid = (user or {}).get("sub") or (user or {}).get("id")
+            player = sb_get_player_by_uid(supa_uid) or sb_upsert_player_from_user(user)
+            if player:
+                sb_insert_game_run(int(player["id"]), letter, theme, duration, score, words, inputs, off_theme)
+            else:
+                logger.error("Could not upsert/find player for uid=%s", supa_uid)
+        except Exception as e:
+            logger.exception("submit-run REST error: %s", e)
+    else:
+        logger.error("Supabase REST not configured (no SUPABASE_SERVICE_ROLE). Returning score only.")
 
     return JSONResponse({
         "ok": True, "score": score, "valid": valid, "off_theme": off_theme,
