@@ -92,6 +92,25 @@
   </style>
 
   <script>
+    // --- Tiny auth shim so START works even if base.html didn't define ensureAuth ---
+    if (typeof window.ensureAuth !== 'function') {
+      window.ensureAuth = async function ensureAuth(options = {}) {
+        const force = !!options.force;
+        try {
+          if (window.sb?.auth?.getSession) {
+            const { data:{ session } } = await window.sb.auth.getSession();
+            if (session?.access_token) {
+              window.__supabase_token = session.access_token; // ensure fetch() wrapper can attach it
+              return session;
+            }
+          }
+        } catch (e) { /* ignore */ }
+        if (window.__supabase_token) return { access_token: window.__supabase_token };
+        if (force) document.getElementById('authDialog')?.showModal();
+        return null;
+      };
+    }
+
     const state = { voice:false,listening:false,running:false,remaining:60,words:new Set(),onTheme:new Set(),offTheme:new Set(),invalid:0,sr:null,timerId:null,startedAt:null };
 
     function showStartPlaceholder(show){
@@ -124,6 +143,8 @@
     document.getElementById('startBtn').addEventListener("click", async () => {
       const session = await window.ensureAuth({ force: true });
       if (!session) return; // login dialog opened; stop here
+      // ensure token is set for /api/submit-run later
+      if (session.access_token) window.__supabase_token = session.access_token;
       startRound();
     });
 
