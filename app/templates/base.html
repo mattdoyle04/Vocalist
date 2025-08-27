@@ -29,7 +29,7 @@
     .nav-link:hover{opacity:1}
     .nav-link:focus{outline:none}
 
-    /* Buttons (page uses these too) */
+    /* Buttons used in page + modals */
     .btn{border:1px solid var(--line);border-radius:12px;padding:10px 16px;background:#fff;cursor:pointer}
     .btn-primary{background:var(--accent);color:#fff;border:0}
     .btn-ghost{background:#fff;color:var(--ink-2)}
@@ -51,7 +51,7 @@
     }
     .modal-x:hover{opacity:1;background:#f8fafc}
 
-    /* Table + lists inside modals */
+    /* Tables / lists inside modals */
     .tbl{width:100%;border-collapse:separate;border-spacing:0;overflow:hidden;border:1px solid var(--line);border-radius:14px}
     .tbl th,.tbl td{padding:10px 12px;border-bottom:1px solid var(--line);font-size:14px}
     .tbl th{background:#fbfdff;text-align:left;color:var(--muted);font-weight:700}
@@ -141,6 +141,7 @@
       const session = await getSessionSafe();
       window.__supabase_token = session?.access_token || null;
       toggleAuthUI(!!session, session?.user);
+      updateHxAuthHeaders(); // keep hx-headers in sync with token
     }
     function toggleAuthUI(authed, user){
       const loginBtn  = document.getElementById('authLoginBtn');
@@ -154,20 +155,22 @@
       }
     }
 
-    // Initial sync + on change
+    // Initial sync (don’t await here)
     syncSupabaseToken();
+    // React to auth changes
     window.sb?.auth?.onAuthStateChange((_evt, session) => {
       window.__supabase_token = session?.access_token || null;
       toggleAuthUI(!!session, session?.user);
+      updateHxAuthHeaders();
     });
 
-    // Attach Authorization to ALL HTMX requests
+    // === HTMX auth header (synchronous) ===
     document.body.addEventListener('htmx:configRequest', (evt) => {
       const t = window.__supabase_token;
       if (t) evt.detail.headers['Authorization'] = 'Bearer ' + t;
     });
 
-    // Update hx-headers on nav buttons so future clicks always carry the token
+    // Keep hx-headers set on nav buttons (so token travels with click)
     function updateHxAuthHeaders() {
       const t = window.__supabase_token;
       const hdr = t ? JSON.stringify({ Authorization: 'Bearer ' + t }) : null;
@@ -176,16 +179,7 @@
         else btn.removeAttribute('hx-headers');
       });
     }
-
-    // Call whenever auth changes
-    (async () => { await syncSupabaseToken(); updateHxAuthHeaders(); })();
-    window.sb?.auth?.onAuthStateChange((_evt, session) => {
-      window.__supabase_token = session?.access_token || null;
-      toggleAuthUI(!!session, session?.user);
-      updateHxAuthHeaders();
-    });
-
-    // If not signed in, intercept nav clicks & show login instead of sending a 401 request
+    // Gate clicks when not signed in: show login dialog instead of sending a 401
     function requireAuthFor(selector) {
       const el = document.querySelector(selector);
       if (!el) return;
@@ -200,8 +194,8 @@
     requireAuthFor('button.nav-link[hx-get="/my-stats"]');
     requireAuthFor('button.nav-link[hx-get="/history"]');
     requireAuthFor('button.nav-link[hx-get="/leaderboard"]');
+
     // Only open the newly inserted dialog in #modalHost; remove on close
-    
     const modalHost = document.getElementById('modalHost');
     document.body.addEventListener('htmx:afterSwap', (evt) => {
       if (evt.detail.target !== modalHost) return;
@@ -238,8 +232,8 @@
       document.getElementById('authSendBtn').disabled = true;
 
       const redirectTo = SITE_URL_HINT || window.location.origin;
-
       try{
+        const sb = initSB();
         const { error } = await sb.auth.signInWithOtp({
           email,
           options: { emailRedirectTo: redirectTo }
@@ -253,24 +247,16 @@
     });
 
     document.getElementById('authLogoutBtn')?.addEventListener('click', async () => {
-      try { await sb.auth.signOut(); } finally { window.__supabase_token = null; toggleAuthUI(false, null); }
+      try { const sb = initSB(); await sb?.auth?.signOut(); } finally { window.__supabase_token = null; toggleAuthUI(false, null); updateHxAuthHeaders(); }
     });
 
-    // Helper for pages to gate actions
-    window.ensureAuth = async ({force=false}={}) => {
-      const session = await getSessionSafe();
-      if (!session && force) document.getElementById('authDialog')?.showModal();
-      return session;
-    };
-
-    // Same-origin fetch wrapper to include Authorization
+    // Optional: same-origin fetch wrapper (adds Authorization automatically)
     (function wrapFetch(){
       const _fetch = window.fetch.bind(window);
       window.fetch = async (input, init = {}) => {
         const url = (typeof input === 'string') ? input : (input?.url || '');
         const sameOrigin = !/^https?:\/\//i.test(url) || url.startsWith(location.origin);
         if (sameOrigin) {
-          if (!window.__supabase_token) await syncSupabaseToken();
           init.headers = new Headers(init.headers || {});
           if (window.__supabase_token && !init.headers.has('Authorization')) {
             init.headers.set('Authorization', 'Bearer ' + window.__supabase_token);
