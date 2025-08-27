@@ -3,6 +3,8 @@ import os
 import json
 import base64
 import secrets
+import logging
+from pathlib import Path
 from datetime import datetime, timedelta, timezone, date
 from typing import Any, Dict, Optional, Set, List
 
@@ -14,11 +16,10 @@ from dotenv import load_dotenv
 
 # --- DB (optional; used only if DATABASE_URL is set) ---
 from sqlalchemy import (
-    create_engine, select, Column, Integer, Text, DateTime, Date, ForeignKey
+    create_engine, select, Column, Integer, Text, DateTime, Date, ForeignKey, func, text as sqla_text
 )
 from sqlalchemy.orm import sessionmaker, declarative_base, Session as SASession
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import func, text
 
 try:
     from sqlalchemy.dialects.postgresql import UUID as PGUUID
@@ -26,29 +27,36 @@ try:
 except Exception:
     HAS_PG = False
 
+
 # ------------------------------------------------------
 # App & config
 # ------------------------------------------------------
-load_dotenv()  # load .env
+load_dotenv()  # load .env (dev); prod uses env vars
 
 app = FastAPI()
 
-# Session secret for server-side session cookies (not Supabase auth)
+# logging
+logger = logging.getLogger("vocalist")
+logger.setLevel(logging.INFO)
+
+# Session (for small server-side state; not Supabase auth)
 SESSION_SECRET = os.getenv("SESSION_SECRET") or secrets.token_urlsafe(32)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 
 # Timezone (Australia/Melbourne)
 TZ = timezone(timedelta(hours=10))
 
-# Templates (inject Supabase keys globally so base.html can read them)
-templates = Jinja2Templates(directory="app/templates")
+# Templates with injected globals (Supabase keys + SITE_URL)
+BASE_DIR = Path(__file__).resolve().parent               # .../app
+TEMPLATES_DIR = str(BASE_DIR / "templates")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
-ROUND_SECONDS = int(os.getenv("ROUND_SECONDS", "30"))
-
-SITE_URL = os.getenv("SITE_URL", "").strip()
-SUPABASE_URL = (os.getenv("SUPABASE_URL", "") or "").strip()
+SUPABASE_URL  = (os.getenv("SUPABASE_URL", "") or "").strip()
 SUPABASE_ANON = (os.getenv("SUPABASE_ANON", "") or os.getenv("SUPABASE_ANON_KEY", "") or "").strip()
 SUPABASE_JWT_ISS = (os.getenv("SUPABASE_JWT_ISS", "") or (SUPABASE_URL.rstrip("/") + "/auth/v1" if SUPABASE_URL else "")).strip()
+SITE_URL = (os.getenv("SITE_URL", "") or "").strip()  # e.g. https://vocalist-xxxx.onrender.com
+
+ROUND_SECONDS = int(os.getenv("ROUND_SECONDS", "30"))
 
 templates.env.globals.update({
     "SUPABASE_URL": SUPABASE_URL,
@@ -57,14 +65,7 @@ templates.env.globals.update({
 })
 
 # ------------------------------------------------------
-# Static (optional)
-# ------------------------------------------------------
-# If you later add /static, uncomment:
-# from fastapi.staticfiles import StaticFiles
-# app.mount("/static", StaticFiles(directory="app/static"), name="static")
-
-# ------------------------------------------------------
-# Minimal auth dependency (Supabase JWT)
+# Minimal Supabase JWT dependency
 # ------------------------------------------------------
 def _b64url_json(segment: str) -> Dict[str, Any]:
     padding = '=' * (-len(segment) % 4)
@@ -94,11 +95,11 @@ def require_user(request: Request) -> Dict[str, Any]:
             raise HTTPException(status_code=401, detail="Wrong issuer")
     return payload
 
+
 # ------------------------------------------------------
 # DB setup (optional)
 # ------------------------------------------------------
 DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip()
-# IMPORTANT: default is OFF. Only create tables if you explicitly set AUTO_CREATE_TABLES=1
 AUTO_CREATE_TABLES = (os.getenv("AUTO_CREATE_TABLES") or "0").strip() in {"1", "true", "True"}
 
 Base = declarative_base()
@@ -138,41 +139,56 @@ def create_db_and_tables():
     if engine:
         Base.metadata.create_all(bind=engine)
 
+
 # ------------------------------------------------------
-# Themes / validation
+# Themes / word validation (robust file loading)
 # ------------------------------------------------------
-DATA_DIR = "app/data/themes"
-THEMES: List[str] = ["ANIMALS", "FOOD", "COLORS", "SPORTS", "COUNTRIES", "DOGBREEDS"]
+DATA_DIR = BASE_DIR / "data" / "themes"     # -> app/data/themes
+THEMES: List[str] = ["animals", "food", "colors", "sports", "countries", "dogbreeds"]
+
 _theme_cache: Dict[str, Set[str]] = {}
 
 def _norm_word(s: str) -> str:
-    return "".join(ch for ch in s.lower() if ch.isalpha())
+    return "".join(ch for ch in s.lower() if ch.isalpha() or ch == " ")
 
 def load_theme_words(theme: str) -> Set[str]:
-    if theme in _theme_cache:
-        return _theme_cache[theme]
-    path = os.path.join(DATA_DIR, f"{theme}.txt")
+    """Load and cache words for a theme (filename is lowercase)."""
+    key = (theme or "").strip().lower()
+    if key in _theme_cache:
+        return _theme_cache[key]
+
+    path = DATA_DIR / f"{key}.txt"
     words: Set[str] = set()
+
+    if not path.exists():
+        logger.warning("Theme file not found: %s", str(path))
+        _theme_cache[key] = set()
+        return _theme_cache[key]
+
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with path.open("r", encoding="utf-8") as f:
             for line in f:
                 w = _norm_word(line.strip())
                 if w:
                     words.add(w)
-    except FileNotFoundError:
+        logger.info("Loaded theme '%s' (%d words) from %s", key, len(words), str(path))
+    except Exception as e:
+        logger.exception("Failed reading theme file %s: %s", str(path), e)
         words = set()
-    _theme_cache[theme] = words
-    return words
+
+    _theme_cache[key] = words
+    return _theme_cache[key]
 
 def check_word_server(word: str, letter: str, theme: str) -> Dict[str, Any]:
     w = _norm_word(word)
-    if not w or len(w) < 3:
+    if not w or len(w.replace(" ", "")) < 3:
         return {"ok": False, "why": "too-short", "theme": theme, "theme_ok": False}
     if not w.startswith(letter.lower()):
         return {"ok": False, "why": "letter-mismatch", "theme": theme, "theme_ok": False}
     theme_words = load_theme_words(theme)
     theme_ok = w in theme_words if theme_words else False
-    return {"ok": True, "theme": theme, "theme_ok": theme_ok, "word": w, "theme_mode": "loose"}
+    return {"ok": True, "theme": theme, "theme_ok": theme_ok, "word": w, "theme_mode": "list"}
+
 
 # ------------------------------------------------------
 # Letter selection & scoring
@@ -242,8 +258,21 @@ def advance_round():
     seed = _hash32("L|" + key) ^ _hash32(f"R|{app.state.round_idx}")
     app.state.letter_char = _weighted_choice(seed, LETTERS_ORDER, weights)
 
-def get_player_by_user(db: SessionLocal, user_payload: Dict[str, Any]):
-    """Find the Player row for the current Supabase user (by sub/id)."""
+
+# ------------------------------------------------------
+# Startup
+# ------------------------------------------------------
+@app.on_event("startup")
+def _on_start():
+    if AUTO_CREATE_TABLES and engine:
+        create_db_and_tables()
+    seed_indices_for_today()
+
+
+# ------------------------------------------------------
+# Helpers for stats/history/leaderboard
+# ------------------------------------------------------
+def get_player_by_user(db: SASession, user_payload: Dict[str, Any]):
     if not db or not user_payload:
         return None
     supa_uid = str(user_payload.get("sub") or user_payload.get("id") or "")
@@ -251,16 +280,10 @@ def get_player_by_user(db: SessionLocal, user_payload: Dict[str, Any]):
         return None
     return db.execute(select(Player).where(Player.user_uid == supa_uid)).scalar_one_or_none()
 
-def build_stats_for_player(db: SessionLocal, player_id: int) -> Dict[str, Any]:
-    """Aggregate simple lifetime stats for a player."""
+def build_stats_for_player(db: SASession, player_id: int) -> Dict[str, Any]:
     stats = {
-        "games_played": 0,
-        "total_score": 0,
-        "avg_score": 0.0,
-        "best_score": 0,
-        "valid_words": 0,
-        "off_theme": 0,
-        "last_played": "—",
+        "games_played": 0, "total_score": 0, "avg_score": 0.0,
+        "best_score": 0, "valid_words": 0, "off_theme": 0, "last_played": "—",
     }
     if not db or not player_id:
         return stats
@@ -280,21 +303,19 @@ def build_stats_for_player(db: SessionLocal, player_id: int) -> Dict[str, Any]:
     stats["last_played"]  = (last_played.isoformat() if last_played else "—")
     stats["avg_score"]    = (stats["total_score"] / stats["games_played"]) if stats["games_played"] else 0.0
 
-    # Estimate valid_words from stored score & per-letter bonus:
-    # score = valid * (1 + rarity_bonus(letter))  -> valid = score / (1+bonus)
+    # Estimate valid words from stored runs
     valid_est = 0
     for (score, letter) in db.execute(
         select(GameRun.score, GameRun.letter).where(GameRun.player_id == player_id)
     ):
         bonus = rarity_bonus(letter or "")
-        per  = 1 + bonus
+        per = 1 + bonus
         if per > 0:
             valid_est += int((score or 0) // per)
     stats["valid_words"] = int(valid_est)
     return stats
 
-def build_history_for_player(db: SessionLocal, player_id: int, limit: int = 30) -> List[Dict[str, Any]]:
-    """Recent games for a player (most recent first)."""
+def build_history_for_player(db: SASession, player_id: int, limit: int = 30) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     if not db or not player_id:
         return rows
@@ -314,16 +335,15 @@ def build_history_for_player(db: SessionLocal, player_id: int, limit: int = 30) 
             words_count = 0
         rows.append({
             "play_date": d.isoformat() if hasattr(d, "isoformat") else str(d),
-            "letter": letter,
-            "theme": theme,
+            "letter": (letter or "").upper(),
+            "theme": (theme or "").upper(),
             "score": int(score or 0),
             "duration": int(dur or 0),
             "words": words_count,
         })
     return rows
 
-def build_leaderboard(db: SessionLocal, limit: int = 10) -> List[Dict[str, Any]]:
-    """Top players by total score."""
+def build_leaderboard(db: SASession, limit: int = 10) -> List[Dict[str, Any]]:
     leaders: List[Dict[str, Any]] = []
     if not db:
         return leaders
@@ -335,7 +355,7 @@ def build_leaderboard(db: SessionLocal, limit: int = 10) -> List[Dict[str, Any]]
         )
         .join(GameRun, GameRun.player_id == Player.id)
         .group_by(Player.id, Player.name)
-        .order_by(text("total DESC"))
+        .order_by(sqla_text("total DESC"))
         .limit(limit)
     )
     for name, total, games in db.execute(q):
@@ -346,86 +366,56 @@ def build_leaderboard(db: SessionLocal, limit: int = 10) -> List[Dict[str, Any]]
         })
     return leaders
 
-# ------------------------------------------------------
-# Startup
-# ------------------------------------------------------
-@app.on_event("startup")
-def _on_start():
-    # Will NOT create tables unless AUTO_CREATE_TABLES=1 is set in the environment
-    if AUTO_CREATE_TABLES and engine:
-        create_db_and_tables()
-    seed_indices_for_today()
-
-# ------------------------------------------------------
-# Helpers: safe template rendering for modals (prevents 500s)
-# ------------------------------------------------------
-def _safe_dialog(request: Request, template_name: str, title_fallback: str) -> HTMLResponse:
-    """
-    Try to render a template. If it fails (missing file, error, etc.),
-    return a minimal <dialog> with the error so you don't get a 500.
-    """
-    try:
-        return templates.TemplateResponse(template_name, {"request": request})
-    except Exception as e:
-        html = f"""<dialog data-autoshow>
-  <div class="modal-card">
-    <h2>{title_fallback}</h2>
-    <p class="modal-subtle">Couldn’t render template "<code>{template_name}</code>".</p>
-    <pre style="white-space:pre-wrap;font-size:12px">{str(e)}</pre>
-    <div class="modal-actions">
-      <form method="dialog"><button class="btn btn-primary">Close</button></form>
-    </div>
-  </div>
-</dialog>"""
-        return HTMLResponse(html)
 
 # ------------------------------------------------------
 # Routes: pages
 # ------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
-    # Globals (SUPABASE_URL/ANON) are injected automatically
     return templates.TemplateResponse("index.html", {"request": request})
+
+def _safe_dialog(request: Request, template_name: str, ctx: Dict[str, Any]) -> HTMLResponse:
+    try:
+        return templates.TemplateResponse(template_name, ctx)
+    except Exception as e:
+        html = f"""<dialog data-autoshow><div class="modal-card">
+<h2>Error</h2><p class="modal-subtle">Couldn’t render <code>{template_name}</code>.</p>
+<pre style="white-space:pre-wrap;font-size:12px">{str(e)}</pre>
+<div class="modal-actions"><form method="dialog"><button class="btn btn-primary">Close</button></form></div>
+</div></dialog>"""
+        return HTMLResponse(html)
 
 @app.get("/my-stats", response_class=HTMLResponse)
 def my_stats(request: Request, user: Dict[str, Any] = Depends(require_user)):
-    # Default empty payload in case DB isn't configured
     ctx = {"request": request, "stats": {}}
     if SessionLocal is None:
-        return templates.TemplateResponse("_my_stats.html", ctx)
-
+        return _safe_dialog(request, "_my_stats.html", ctx)
     with SessionLocal() as db:
         player = get_player_by_user(db, user)
-        if not player:
-            return templates.TemplateResponse("_my_stats.html", ctx)
-        stats = build_stats_for_player(db, player.id)
-        ctx["stats"] = stats
-        return templates.TemplateResponse("_my_stats.html", ctx)
+        if player:
+            ctx["stats"] = build_stats_for_player(db, player.id)
+        return _safe_dialog(request, "_my_stats.html", ctx)
 
 @app.get("/history", response_class=HTMLResponse)
 def history(request: Request, user: Dict[str, Any] = Depends(require_user)):
     ctx = {"request": request, "history": []}
     if SessionLocal is None:
-        return templates.TemplateResponse("_history.html", ctx)
-
+        return _safe_dialog(request, "_history.html", ctx)
     with SessionLocal() as db:
         player = get_player_by_user(db, user)
-        if not player:
-            return templates.TemplateResponse("_history.html", ctx)
-        rows = build_history_for_player(db, player.id, limit=30)
-        ctx["history"] = rows
-        return templates.TemplateResponse("_history.html", ctx)
+        if player:
+            ctx["history"] = build_history_for_player(db, player.id, limit=30)
+        return _safe_dialog(request, "_history.html", ctx)
 
 @app.get("/leaderboard", response_class=HTMLResponse)
 def leaderboard(request: Request, user: Dict[str, Any] = Depends(require_user)):
     ctx = {"request": request, "leaders": []}
     if SessionLocal is None:
-        return templates.TemplateResponse("_leaderboard.html", ctx)
-
+        return _safe_dialog(request, "_leaderboard.html", ctx)
     with SessionLocal() as db:
-        rows = build_leaderboard(db, limit=10)
-        ctx["leaders"] = rows
-        return templates.TemplateResponse("_leaderboard.html", ctx)
+        ctx["leaders"] = build_leaderboard(db, limit=10)
+        return _safe_dialog(request, "_leaderboard.html", ctx)
+
 
 # ------------------------------------------------------
 # Routes: api
@@ -434,7 +424,6 @@ def leaderboard(request: Request, user: Dict[str, Any] = Depends(require_user)):
 def health():
     return JSONResponse({"ok": True, "time": datetime.now(TZ).isoformat()})
 
-# in api_today()
 @app.get("/api/today", response_class=JSONResponse)
 def api_today(request: Request, advance: int = 0):
     if int(advance or 0) == 1:
@@ -442,10 +431,9 @@ def api_today(request: Request, advance: int = 0):
     return JSONResponse({
         "letter": current_letter(),
         "theme": current_theme(),
-        "roundSeconds": ROUND_SECONDS,   # was 60
+        "roundSeconds": ROUND_SECONDS,          # 30 by default
         "letterBonus": rarity_bonus(current_letter()),
     })
-
 
 @app.post("/api/check-word", response_class=JSONResponse)
 def api_check_word(data: Dict[str, Any] = Body(...)):
@@ -460,7 +448,6 @@ def api_submit_run(
     payload: Dict[str, Any] = Body(...),
     user: Dict[str, Any] = Depends(require_user),
 ):
-    # current pair
     letter = current_letter()
     theme = current_theme()
 
@@ -522,7 +509,7 @@ def api_submit_run(
                 db.add(gr)
                 db.commit()
         except SQLAlchemyError:
-            # Ignore DB errors during gameplay; still return score
+            # Non-fatal during gameplay; still return score
             pass
 
     return JSONResponse({
@@ -536,8 +523,9 @@ def api_submit_run(
         "base_points": base_points_per_word,
     })
 
+
 # ------------------------------------------------------
-# Debug: sanity check (never returns the anon key)
+# Debug: sanity checks (keep during dev)
 # ------------------------------------------------------
 @app.get("/debug/auth", response_class=JSONResponse)
 def debug_auth():
@@ -551,6 +539,27 @@ def debug_auth():
         "supabase_url_present": bool(SUPABASE_URL),
         "supabase_anon_present": bool(SUPABASE_ANON),
         "supabase_jwt_iss": SUPABASE_JWT_ISS,
-        "supabase_host": host,
+        "site_url": SITE_URL,
         "anon_len": len(SUPABASE_ANON) if SUPABASE_ANON else 0,
+        "templates_dir": TEMPLATES_DIR,
     })
+
+@app.get("/debug/theme", response_class=JSONResponse)
+def debug_theme(theme: Optional[str] = None):
+    t = (theme or current_theme()).lower()
+    words = load_theme_words(t)
+    sample = sorted(list(words))[:10]
+    return JSONResponse({
+        "theme": t,
+        "data_dir": str(DATA_DIR),
+        "file": str((DATA_DIR / f"{t}.txt").resolve()),
+        "count": len(words),
+        "sample": sample,
+        "server_letter": current_letter(),
+    })
+
+@app.get("/debug/check", response_class=JSONResponse)
+def debug_check(word: str):
+    res = check_word_server(word, current_letter(), current_theme())
+    res.update({"server_letter": current_letter(), "server_theme": current_theme()})
+    return JSONResponse(res)
