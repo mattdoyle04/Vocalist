@@ -45,15 +45,15 @@ templates = Jinja2Templates(directory="app/templates")
 
 ROUND_SECONDS = int(os.getenv("ROUND_SECONDS", "30"))
 
+SITE_URL = os.getenv("SITE_URL", "").strip()
 SUPABASE_URL = (os.getenv("SUPABASE_URL", "") or "").strip()
-# Accept either SUPABASE_ANON or SUPABASE_ANON_KEY
 SUPABASE_ANON = (os.getenv("SUPABASE_ANON", "") or os.getenv("SUPABASE_ANON_KEY", "") or "").strip()
-# Optional issuer; default derived from URL
 SUPABASE_JWT_ISS = (os.getenv("SUPABASE_JWT_ISS", "") or (SUPABASE_URL.rstrip("/") + "/auth/v1" if SUPABASE_URL else "")).strip()
 
 templates.env.globals.update({
     "SUPABASE_URL": SUPABASE_URL,
     "SUPABASE_ANON": SUPABASE_ANON,
+    "SITE_URL": SITE_URL,
 })
 
 # ------------------------------------------------------
