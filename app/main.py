@@ -1,7 +1,7 @@
 # app/main.py
 import os, json, base64, secrets, logging, socket as _socket
 from pathlib import Path
-from datetime import datetime, timedelta, timezone, date
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional, Set, List
 from urllib.parse import urlencode
 from urllib.request import Request as URLRequest, urlopen
@@ -13,7 +13,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
 
-# ---------------- IPv4 preference (avoid IPv6-only DNS paths) ----------------
+# Prefer IPv4 resolution (belt & braces; REST uses HTTPS anyway)
 __orig_getaddrinfo = _socket.getaddrinfo
 def __ipv4_first_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
     res = __orig_getaddrinfo(host, port, family, type, proto, flags)
@@ -88,6 +88,9 @@ class SupaREST:
             "accept": "application/json",
             "apikey": self.key,
             "Authorization": f"Bearer {self.key}",
+            # Explicit schema to avoid rare “permission denied” when default profile isn’t public
+            "Accept-Profile": "public",
+            "Content-Profile": "public",
             "Content-Type": "application/json",
             "Prefer": "return=representation",
         }
@@ -424,7 +427,6 @@ def api_submit_run(
     bonus = rarity_bonus(letter)
     score = valid * (base_points + bonus)
 
-    # Ensure player row then insert game_run via REST
     if SB:
         try:
             supa_uid = (user or {}).get("sub") or (user or {}).get("id")
@@ -465,3 +467,23 @@ def debug_db():
         return {"connected": True, "via": "supabase-rest"}
     except Exception as e:
         return JSONResponse({"connected": False, "via":"supabase-rest", "error": str(e)}, status_code=500)
+
+@app.get("/debug/rest-auth", response_class=JSONResponse)
+def debug_rest_auth():
+    """Diagnose the SUPABASE_SERVICE_ROLE JWT without exposing it."""
+    key = SUPABASE_SERVICE_ROLE
+    info = {"present": bool(key)}
+    try:
+        if key:
+            header, payload, _sig = key.split(".", 2)
+            hdr = _b64url_json(header)
+            pl  = _b64url_json(payload)
+            info.update({
+                "header_alg": hdr.get("alg"),
+                "payload_role": pl.get("role"),
+                "payload_iss": pl.get("iss"),
+                "payload_aud": pl.get("aud"),
+            })
+    except Exception as e:
+        info["error"] = str(e)
+    return JSONResponse(info)
