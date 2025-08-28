@@ -19,6 +19,15 @@
     .brand{font-weight:800;letter-spacing:.08em}
     .nav-right{display:flex;align-items:center;gap:18px}
 
+    /* Mobile nav */
+    #navMenuBtn{display:none}
+    @media (max-width:480px){
+      .nav-inner{position:relative}
+      #navMenuBtn{display:block}
+      .nav-right{display:none;flex-direction:column;align-items:flex-start;position:absolute;top:100%;right:0;background:#fff;padding:12px;border:1px solid var(--line);border-radius:12px;gap:12px;box-shadow:var(--shadow)}
+      .nav-right.open{display:flex}
+    }
+
     /* Make buttons and spans render identically */
     button.nav-link{font:inherit;}
     .nav-link{
@@ -74,6 +83,7 @@
   <header class="navbar">
     <div class="container nav-inner">
       <div class="brand">Vocalist</div>
+      <button class="nav-link" id="navMenuBtn">Menu</button>
       <nav class="nav-right">
         <button class="nav-link" hx-get="/my-stats"    hx-target="#modalHost" hx-swap="beforeend">Stats</button>
         <button class="nav-link" hx-get="/history"     hx-target="#modalHost" hx-swap="beforeend">History</button>
@@ -194,6 +204,11 @@
     requireAuthFor('button.nav-link[hx-get="/my-stats"]');
     requireAuthFor('button.nav-link[hx-get="/history"]');
     requireAuthFor('button.nav-link[hx-get="/leaderboard"]');
+
+    // Mobile nav toggle
+    document.getElementById('navMenuBtn')?.addEventListener('click', () => {
+      document.querySelector('.nav-right')?.classList.toggle('open');
+    });
 
     // Only open the newly inserted dialog in #modalHost; remove on close
     const modalHost = document.getElementById('modalHost');

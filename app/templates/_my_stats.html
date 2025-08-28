@@ -1,4 +1,11 @@
 <dialog data-autoshow id="dlg-my-stats">
+  <style>
+    @media (max-width: 480px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
   <div class="modal-card">
     <form method="dialog"><button class="modal-x" aria-label="Close">×</button></form>
     <h2>Your stats</h2>
@@ -6,7 +13,7 @@
     <hr class="modal-divider" />
     {% set s = stats|default({}) %}
     {% if s and (s.games_played|default(0)) > 0 %}
-      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:8px 0">
+      <div class="stats-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:8px 0">
         <div><div class="modal-subtle">GAMES</div><div style="font-weight:800">{{ s.games_played }}</div></div>
         <div><div class="modal-subtle">STREAK</div><div style="font-weight:800">{{ s.streak }}</div></div>
         <div><div class="modal-subtle">TOTAL</div><div style="font-weight:800">{{ s.total_score }}</div></div>

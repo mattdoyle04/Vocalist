@@ -6,7 +6,7 @@
     <hr class="modal-divider" />
     {% set rows = history|default([]) %}
     {% if rows and rows|length > 0 %}
-      <div style="max-height:60vh;overflow:auto;margin-top:6px">
+        <div style="max-height:60vh;margin-top:6px;max-width:100vw;overflow-x:auto;overflow-y:auto;">
         <table class="tbl">
           <thead>
             <tr><th>Date</th><th>Letter</th><th>Theme</th><th>Score</th><th>Words</th></tr>
