@@ -28,10 +28,11 @@
       .nav-right{
         display:none;flex-direction:column;align-items:flex-start;
         position:absolute;top:100%;left:50%;transform:translateX(-50%);
-        width:100vw;background:#fff;padding:14px 20px;
+        width:100vw;background:#fff;padding:16px 24px;
         border:0;border-radius:0;gap:12px;box-shadow:var(--shadow);
         border-top:1px solid var(--line);
       }
+      .nav-right .nav-link{ padding:10px 0; }
       .nav-right.open{display:flex}
     }
 
@@ -85,6 +86,11 @@
       /* Extra breathing room just for navbar */
       .navbar .container{ padding-left:24px; padding-right:24px; }
       .nav-inner{ padding:14px 0; }
+
+      /* Compact tables on phones to avoid horizontal scroll */
+      #dlg-history .tbl{ table-layout: fixed; }
+      #dlg-history .tbl th, #dlg-history .tbl td{ padding:8px; font-size:12px; white-space:normal; word-break:break-word; }
+      #dlg-leaderboard .tbl th, #dlg-leaderboard .tbl td{ padding:8px; font-size:12px; }
     }
   </style>
 </head>

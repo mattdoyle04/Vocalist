@@ -6,15 +6,28 @@
     <hr class="modal-divider" />
     {% set rows = leaders|default([]) %}
     {% if rows and rows|length > 0 %}
-      <ol class="ol-plain">
-        {% for p in rows %}
-          <li>
-            <strong>{{ p.name|default("Player") }}</strong>
-            — {{ p.score|default(0) }} pts
-            {% if p.games %}<span class="modal-subtle"> ({{ p.games }} games)</span>{% endif %}
-          </li>
-        {% endfor %}
-      </ol>
+      <div style="max-height:60vh; overflow:auto;">
+        <table class="tbl">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Player</th>
+              <th>Score</th>
+              <th>Games</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for p in rows %}
+              <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ p.name|default("Player") }}</td>
+                <td>{{ p.score|default(0) }}</td>
+                <td>{{ p.games|default(0) }}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     {% else %}
       <p class="modal-subtle">No scores yet. Be the first!</p>
     {% endif %}
