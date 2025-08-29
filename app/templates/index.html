@@ -95,8 +95,10 @@
 
     /* Mobile responsive adjustments */
     @media (max-width: 480px){
+      /* Halve vertical padding inside sections; keep horizontal padding */
+      .section{ padding:9px 18px; }
       /* Header section breathing room and tighter letter bubble */
-      .section.today{ padding:22px; }
+      .section.today{ padding:11px 22px; }
       .letter{ width:68px; height:68px; font-size:38px; }
       .theme .value{ font-size:22px; }
       .compact-controls{ right:10px; top:10px; }
@@ -110,6 +112,8 @@
 
       /* Modal summary word list readability */
       .wordstream li,.wordstream span{ font-size:11px; }
+      /* Remove separator line above Start button on mobile */
+      .bottombar{ border-top:0; }
     }
 
     /* Provide bottom breathing room when OSK visible so input + words remain visible */
