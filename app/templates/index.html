@@ -21,7 +21,7 @@
   <section class="section composer">
     <div id="modePill" class="mode-pill" style="display:none">VOICE MODE</div>
     <div id="startPlaceholder" class="placeholder-letter" aria-hidden="true" style="display:none">?</div>
-    <input id="typeInput" class="giant-input" type="text" placeholder="" disabled />
+    <input id="typeInput" class="giant-input" type="text" placeholder="" inputmode="none" disabled />
     <div id="liveTranscript" class="transcript" style="display:none"></div>
     <div id="tinyHint" class="tiny-hint"></div>
   </section>
@@ -31,7 +31,6 @@
 
   <!-- Bottom bar -->
   <footer class="bottombar">
-    <div class="hint">PRESS START, THEN TYPE OR TAP 🎤 TO SPEAK…</div>
     <div class="actions">
       <button id="startBtn" class="btn btn-primary">START</button>
       <button id="finishBtn" class="btn btn-ghost" style="display:none">FINISH</button>
@@ -86,7 +85,7 @@
     .wordstream li,.wordstream span{font-weight:700;letter-spacing:.03em;font-size:12px;color:#475569;line-height:1.1;margin:0}
     .wordstream .off-theme{opacity:.6}
     .bottombar{position:sticky;bottom:0;background:linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,255,255,1) 24%,rgba(255,255,255,1) 100%);padding:24px 0;border-top:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center;gap:12px}
-    .bottombar .hint{font-size:12px;color:var(--ink-2);letter-spacing:.06em}
+    .bottombar .hint{display:none}
     .actions{display:flex;gap:10px}
     .stat-grid{margin:10px 0 8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
     @media (min-width: 640px){ .stat-grid{ grid-template-columns: repeat(6, minmax(0,1fr)); } }
@@ -111,6 +110,13 @@
       /* Modal summary word list readability */
       .wordstream li,.wordstream span{ font-size:11px; }
     }
+
+    /* On-screen keyboard (mobile only) */
+    .osk{ display:none; position:fixed; left:0; right:0; bottom:0; z-index:15; background:#f8fafc; border-top:1px solid #E2E8F0; padding:10px 8px calc(8px + env(safe-area-inset-bottom)); box-shadow:0 -8px 24px rgba(2,6,23,.08); }
+    .osk .row{ display:flex; justify-content:center; gap:6px; margin:6px 0; }
+    .osk button{ flex:0 0 auto; height:42px; min-width:28px; padding:0 10px; border-radius:10px; border:1px solid #e2e8f0; background:#fff; font-weight:800; letter-spacing:.04em; font-size:16px; box-shadow:var(--shadow); }
+    .osk button.wide{ min-width:66px; }
+    @media (max-width: 480px){ .osk.show{ display:block; } }
   </style>
 
   <script>
@@ -130,7 +136,7 @@
       };
     }
 
-    const state = { voice:false,listening:false,running:false,remaining:60,words:new Set(),onTheme:new Set(),offTheme:new Set(),invalid:0,sr:null,timerId:null,startedAt:null };
+    const state = { voice:false,listening:false,running:false,remaining:60,words:new Set(),onTheme:new Set(),offTheme:new Set(),invalid:0,sr:null,timerId:null,startedAt:null,buffer:'' };
 
     function showStartPlaceholder(show){
       const ph=document.getElementById('startPlaceholder'), ti=document.getElementById('typeInput');
@@ -146,18 +152,24 @@
     function showTinyHint(msg){ const el=document.getElementById('tinyHint'); el.textContent=String(msg||"").toUpperCase(); el.classList.add("show"); clearTimeout(showTinyHint._t); showTinyHint._t=setTimeout(()=> el.classList.remove("show"), 1200); }
     function setMicVisual(on){ document.getElementById("micMini").setAttribute("aria-pressed", String(on)); }
 
+    // --- On-screen keyboard helpers ---
+    function isSmallScreen(){ return window.matchMedia('(max-width: 480px)').matches; }
+    function renderBuffer(){ const ti=document.getElementById('typeInput'); if (ti) ti.value=(state.buffer||'').toUpperCase(); }
+    function showKeyboard(show){ const kb=document.getElementById('osk'); if (!kb) return; kb.classList.toggle('show', !!show); kb.setAttribute('aria-hidden', show? 'false':'true'); }
+    function clearBuffer(){ state.buffer=''; renderBuffer(); }
+
     async function ensureMicPermission(){ if (!navigator.mediaDevices?.getUserMedia) return true; try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach(t=>t.stop()); return true; } catch { return false; } }
     document.getElementById('micMini').addEventListener("click", async ()=>{ if (!state.running) { showTinyHint("PRESS START"); return; } if(!state.voice){ const ok=await ensureMicPermission(); if(!ok) return; } state.voice=!state.voice; if(state.voice) enterVoiceMode(); else exitVoiceMode(); });
 
     function ensureSpeech(){ const SR=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SR) return null; const r=new SR(); r.continuous=true; r.interimResults=true; r.lang="en-AU"; r.onresult=(e)=>{ if (!state.running) return; for (let i=e.resultIndex;i<e.results.length;i++){ const res=e.results[i]; if(!res.isFinal) continue; const t=(res[0]?.transcript||"").trim(); if(!t) continue; const live=document.getElementById('liveTranscript'); if (live && live.style.display==="none") live.style.display="block"; const parts=t.toLowerCase().split(/\s+/); parts.forEach(w=>acceptCandidate(w,false)); const last=parts[parts.length-1]||""; if (live) live.textContent=last.toUpperCase(); } }; r.onerror=_=>{}; r.onend=()=>{ if(state.voice && state.running && state.remaining>0) try{ r.start(); }catch{} }; return r; }
-    function enterVoiceMode(){ const live=document.getElementById('liveTranscript'); if (live){ live.textContent=""; live.style.display="none"; } document.getElementById('typeInput').style.display="none"; document.getElementById('modePill').style.display="inline-block"; if(!state.sr) state.sr=ensureSpeech(); if(!state.sr){ showTinyHint("VOICE NOT SUPPORTED"); state.voice=false; return exitVoiceMode(); } state.listening=true; setMicVisual(true); try{ state.sr.start(); }catch{}; }
-    function exitVoiceMode(){ document.getElementById('typeInput').style.display="block"; document.getElementById('liveTranscript').style.display="none"; document.getElementById('modePill').style.display="none"; if(state.listening){ state.listening=false; setMicVisual(false); try{ state.sr.stop(); }catch{} } }
+    function enterVoiceMode(){ const live=document.getElementById('liveTranscript'); if (live){ live.textContent=""; live.style.display="none"; } document.getElementById('typeInput').style.display="none"; document.getElementById('modePill').style.display="inline-block"; showKeyboard(false); if(!state.sr) state.sr=ensureSpeech(); if(!state.sr){ showTinyHint("VOICE NOT SUPPORTED"); state.voice=false; return exitVoiceMode(); } state.listening=true; setMicVisual(true); try{ state.sr.start(); }catch{}; }
+    function exitVoiceMode(){ document.getElementById('typeInput').style.display="block"; document.getElementById('liveTranscript').style.display="none"; document.getElementById('modePill').style.display="none"; if(state.listening){ state.listening=false; setMicVisual(false); try{ state.sr.stop(); }catch{} } if (state.running && isSmallScreen()) showKeyboard(true); }
 
     (function wrapFetch(){ const _fetch = window.fetch.bind(window); window.fetch = async (input, init = {}) => { const url = (typeof input === 'string') ? input : (input?.url || ''); const sameOrigin = !/^https?:\/\//i.test(url) || url.startsWith(location.origin); if (sameOrigin) { if (!window.__supabase_token) await (window.syncSupabaseToken?.() || Promise.resolve()); init.headers = new Headers(init.headers || {}); if (window.__supabase_token && !init.headers.has('Authorization')) { init.headers.set('Authorization', 'Bearer ' + window.__supabase_token); } } return _fetch(input, init); }; })();
 
     async function syncToday(advance=false){ try{ const r=await fetch('/api/today' + (advance ? '?advance=1' : '')); if(!r.ok) return; const d=await r.json(); if(d.letter) document.getElementById('letterBubble').textContent=d.letter.toUpperCase(); if(d.theme) document.getElementById('themeHeading').textContent=d.theme.toUpperCase(); window.__letterBonus = (d.letterBonus|0); window.__roundSeconds  = (d.roundSeconds|0)}catch{} }
 
-    document.getElementById('typeInput').addEventListener("keydown",(e)=>{ if(e.key!=="Enter") return; e.preventDefault(); if (!state.running) { showTinyHint("PRESS START"); return; } const v=e.target.value.trim(); if(!v) return; acceptCandidate(v,true); e.target.value=""; });
+    document.getElementById('typeInput').addEventListener("keydown",(e)=>{ if(e.key!=="Enter") return; e.preventDefault(); if (!state.running) { showTinyHint("PRESS START"); return; } const v=(isSmallScreen()? state.buffer : e.target.value).trim(); if(!v) return; acceptCandidate(v,true); clearBuffer(); e.target.value=""; });
 
     document.getElementById('startBtn').addEventListener("click", async () => {
       const session = await window.ensureAuth({ force: true });
@@ -185,7 +197,7 @@
       const strict = (server.theme_mode || '').toLowerCase() === 'strict';
       if (!server.theme_ok) { showTinyHint(`OFF THEME: ${(server.theme||'').toUpperCase()}`); if (strict) return; }
       state.words.add(w); if (server.theme_ok) state.onTheme.add(w); else state.offTheme.add(w);
-      ensureAcceptedUI(); const li=document.createElement("li"); if (!server.theme_ok) li.classList.add("off-theme"); li.textContent=w.toUpperCase(); startRound._ul.prepend(li);
+      ensureAcceptedUI(); const li=document.createElement("li"); if (!server.theme_ok) li.classList.add("off-theme"); li.textContent=w.toUpperCase(); startRound._ul.prepend(li); if (fromTyping) { clearBuffer(); renderBuffer(); }
     }
 
     async function syncAndRevealToday(){ await syncToday(true); const s=document.getElementById('todaySection'); if (s && s.style.display==='none') s.style.display='block'; }
@@ -197,9 +209,14 @@
       await syncAndRevealToday();
       const ti=document.getElementById('typeInput'); ti.placeholder=document.getElementById('letterBubble').textContent; ti.disabled=false; document.getElementById('micMini').disabled=false;
       if(startRound._ul) startRound._ul.innerHTML="";
-      state.words.clear(); state.onTheme.clear(); state.offTheme.clear(); state.invalid=0; state.startedAt=Date.now(); state.running=true;
+      state.words.clear(); state.onTheme.clear(); state.offTheme.clear(); state.invalid=0; state.startedAt=Date.now(); state.running=true; clearBuffer(); renderBuffer();
       document.getElementById('finishBtn').style.display="inline-block"; document.getElementById('startBtn').style.display="none"; setTimer(30);
-      if(state.voice) enterVoiceMode(); else { exitVoiceMode(); ti.focus(); }
+      if(state.voice) { enterVoiceMode(); }
+      else {
+        exitVoiceMode();
+        if (isSmallScreen()) { showKeyboard(true); /* do not focus to avoid native kb */ }
+        else { ti.focus(); }
+      }
       clearInterval(state.timerId); state.timerId=setInterval(()=>{ state.remaining=Math.max(0,state.remaining-1); document.getElementById("timerMini").textContent=new Date(state.remaining*1000).toISOString().substr(14,5); if(state.remaining<=0) endRound(); },1000);
     }
 
@@ -207,6 +224,7 @@
       clearInterval(state.timerId); state.running=false; document.getElementById('finishBtn').style.display="none"; document.getElementById('startBtn').style.display="inline-block";
       const ti=document.getElementById('typeInput'); ti.disabled=true;
       if(state.listening){ state.listening=false; setMicVisual(false); try{ state.sr.stop(); }catch{} }
+      showKeyboard(false);
       const gameSeconds = Math.max(1, Math.round((Date.now()-(state.startedAt||Date.now()))/1000));
       const letter = document.getElementById('letterBubble').textContent || '—';
       const theme  = document.getElementById('themeHeading').textContent || '—';
@@ -232,6 +250,63 @@
     async function submitRun(payload){
       try { const resp = await fetch('/api/submit-run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if (!resp.ok) { document.getElementById('sumScore').textContent='—'; return; } const d = await resp.json(); if (typeof d.score === 'number') { document.getElementById('sumScore').textContent = String(d.score); if (typeof d.bonus_per_word === 'number') document.getElementById('sumBonus').textContent = '+' + d.bonus_per_word; } refreshLeaderboardIfOpen(); } catch { document.getElementById('sumScore').textContent='—'; }
     }
+  </script>
+
+  <!-- On-screen keyboard (rendered once; toggled on mobile) -->
+  <div id="osk" class="osk" aria-hidden="true">
+    <div class="row" aria-label="row-1">
+      <button data-key="q">Q</button>
+      <button data-key="w">W</button>
+      <button data-key="e">E</button>
+      <button data-key="r">R</button>
+      <button data-key="t">T</button>
+      <button data-key="y">Y</button>
+      <button data-key="u">U</button>
+      <button data-key="i">I</button>
+      <button data-key="o">O</button>
+      <button data-key="p">P</button>
+    </div>
+    <div class="row" aria-label="row-2">
+      <button data-key="a">A</button>
+      <button data-key="s">S</button>
+      <button data-key="d">D</button>
+      <button data-key="f">F</button>
+      <button data-key="g">G</button>
+      <button data-key="h">H</button>
+      <button data-key="j">J</button>
+      <button data-key="k">K</button>
+      <button data-key="l">L</button>
+    </div>
+    <div class="row" aria-label="row-3">
+      <button class="wide" data-action="enter">ENTER</button>
+      <button data-key="z">Z</button>
+      <button data-key="x">X</button>
+      <button data-key="c">C</button>
+      <button data-key="v">V</button>
+      <button data-key="b">B</button>
+      <button data-key="n">N</button>
+      <button data-key="m">M</button>
+      <button class="wide" data-action="back">⌫</button>
+    </div>
+  </div>
+
+  <script>
+    // Wire OSK events
+    (function(){
+      const kb = document.getElementById('osk');
+      if (!kb) return;
+      kb.addEventListener('click', (e)=>{
+        const btn = e.target.closest('button'); if(!btn) return;
+        if (!state.running) { showTinyHint('PRESS START'); return; }
+        const key = btn.getAttribute('data-key');
+        const action = btn.getAttribute('data-action');
+        if (key){ state.buffer += key; renderBuffer(); return; }
+        if (action === 'back'){ state.buffer = state.buffer.slice(0,-1); renderBuffer(); return; }
+        if (action === 'enter'){
+          const v = (state.buffer||'').trim(); if(!v) return; acceptCandidate(v, true); return;
+        }
+      });
+    })();
   </script>
 </div>
 
