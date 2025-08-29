@@ -27,7 +27,7 @@
       /* Mobile menu: full-width sidebar below header */
       .nav-right{
         display:none;flex-direction:column;align-items:flex-start;
-        position:absolute;top:100%;left:50%;transform:translateX(-50%);
+        position:absolute;top:100%;left:0;transform:none;
         width:100vw;background:#fff;padding:16px 24px;
         border:0;border-radius:0;gap:12px;box-shadow:var(--shadow);
         border-top:1px solid var(--line);
@@ -83,9 +83,12 @@
     @media (max-width: 480px){
       /* Roomier header container padding on mobile */
       .container{ padding-left:20px; padding-right:20px; }
-      /* Extra breathing room just for navbar */
-      .navbar .container{ padding-left:24px; padding-right:24px; }
+      /* Extra breathing room just for navbar (safe-area aware) */
+      .navbar .container{ padding-left:calc(24px + env(safe-area-inset-left)); padding-right:calc(24px + env(safe-area-inset-right)); }
       .nav-inner{ padding:14px 0; }
+
+      /* Match menu sheet padding to navbar for alignment */
+      .nav-right{ padding-left:calc(24px + env(safe-area-inset-left)); padding-right:calc(24px + env(safe-area-inset-right)); }
 
       /* Compact tables on phones to avoid horizontal scroll */
       #dlg-history .tbl{ table-layout: fixed; }
@@ -93,11 +96,16 @@
       #dlg-history .tbl td:nth-child(2){ font-size:11px; letter-spacing:.02em; font-weight:700; }
       #dlg-leaderboard .tbl{ table-layout: fixed; width:100%; }
       #dlg-leaderboard .tbl th, #dlg-leaderboard .tbl td{ padding:8px; font-size:12px; }
-      #dlg-leaderboard .tbl th:nth-child(1), #dlg-leaderboard .tbl td:nth-child(1){ width:44px; text-align:right; }
+      /* Keep columns tight while allowing names to truncate */
+      #dlg-leaderboard .tbl th:nth-child(1), #dlg-leaderboard .tbl td:nth-child(1){ width:44px; }
       #dlg-leaderboard .tbl th:nth-child(3), #dlg-leaderboard .tbl td:nth-child(3),
-      #dlg-leaderboard .tbl th:nth-child(4), #dlg-leaderboard .tbl td:nth-child(4){ width:64px; text-align:right; white-space:nowrap; }
+      #dlg-leaderboard .tbl th:nth-child(4), #dlg-leaderboard .tbl td:nth-child(4){ width:64px; white-space:nowrap; }
       #dlg-leaderboard .tbl td:nth-child(2){ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     }
+
+    /* Center table text in History and Leaderboard */
+    #dlg-history .tbl th, #dlg-history .tbl td,
+    #dlg-leaderboard .tbl th, #dlg-leaderboard .tbl td{ text-align:center; }
   </style>
 </head>
 
