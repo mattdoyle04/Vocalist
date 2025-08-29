@@ -123,17 +123,18 @@
 
     /* On-screen keyboard (mobile only) */
     .osk{ display:none; position:fixed; left:0; right:0; bottom:0; z-index:15; background:#f8fafc; border-top:1px solid #E2E8F0; padding:12px calc(12px + env(safe-area-inset-left)) calc(12px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-right)); box-shadow:0 -8px 24px rgba(2,6,23,.08); }
-    .osk .row{ display:flex; justify-content:center; gap:4px; margin:6px 0; }
-    .osk button{ flex:0 0 auto; height:54px; min-width:26px; padding:0 10px; border-radius:12px; border:1px solid #e2e8f0; background:#fff; font-weight:800; letter-spacing:.04em; font-size:16px; box-shadow:var(--shadow); color:var(--accent); }
-    .osk button.wide{ min-width:60px; }
+    .osk .row{ display:flex; align-items:center; gap:3px; margin:6px 0; }
+    .osk button{ flex:1 1 0; min-width:0; height:58px; padding:0 6px; border-radius:12px; border:1px solid #e2e8f0; background:#fff; font-weight:800; letter-spacing:.04em; font-size:16px; box-shadow:var(--shadow); color:var(--accent); user-select:none; -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
+    .osk button.wide{ flex:1.6 1 0; }
     /* Extra-tight layout for very small screens */
     @media (max-width: 360px){
       .osk{ padding-left:8px; padding-right:8px; }
-      .osk .row{ gap:3px; margin:6px 0; }
-      .osk button{ height:50px; min-width:24px; padding:0 8px; font-size:15px; }
-      .osk button.wide{ min-width:50px; }
+      .osk .row{ gap:2px; margin:6px 0; }
+      .osk button{ height:52px; padding:0 4px; font-size:15px; }
+      .osk button.wide{ flex:1.5 1 0; }
     }
     @media (max-width: 480px){ .osk.show{ display:block; } }
+    @media (max-width: 480px){ html.osk-open, body.osk-open{ height:100%; overflow:hidden; } }
   </style>
 
   <script>
