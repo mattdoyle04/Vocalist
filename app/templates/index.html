@@ -84,7 +84,7 @@
     .wordstream{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:2px;list-style:none}
     .wordstream li,.wordstream span{font-weight:700;letter-spacing:.03em;font-size:12px;color:#475569;line-height:1.1;margin:0}
     .wordstream .off-theme{opacity:.6}
-    .bottombar{position:sticky;bottom:0;background:linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,255,255,1) 24%,rgba(255,255,255,1) 100%);padding:24px 0;border-top:1px solid #E2E8F0;display:flex;justify-content:space-between;align-items:center;gap:12px}
+    .bottombar{position:sticky;bottom:0;background:linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,255,255,1) 24%,rgba(255,255,255,1) 100%);padding:24px 0;border-top:1px solid #E2E8F0;display:flex;justify-content:flex-end;align-items:center;gap:12px}
     .bottombar .hint{display:none}
     .actions{display:flex;gap:10px}
     .stat-grid{margin:10px 0 8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
@@ -104,11 +104,17 @@
       .mic-mini{ width:36px; height:36px; font-size:17px; }
 
       /* Giant input sizing so long words fit on small screens */
-      .giant-input{ font-size:54px; height:100px; line-height:100px; letter-spacing:.06em; }
+      .giant-input{ font-size:54px; height:92px; line-height:92px; letter-spacing:.06em; }
+      .composer{ min-height:150px; }
       .placeholder-letter{ width:140px; height:140px; font-size:72px; }
 
       /* Modal summary word list readability */
       .wordstream li,.wordstream span{ font-size:11px; }
+    }
+
+    /* Provide bottom breathing room when OSK visible so input + words remain visible */
+    @media (max-width: 480px){
+      body.osk-open main#page{ padding-bottom: calc(220px + env(safe-area-inset-bottom)); }
     }
 
     /* On-screen keyboard (mobile only) */
@@ -162,7 +168,7 @@
     // --- On-screen keyboard helpers ---
     function isSmallScreen(){ return window.matchMedia('(max-width: 480px)').matches; }
     function renderBuffer(){ const ti=document.getElementById('typeInput'); if (ti) ti.value=(state.buffer||'').toUpperCase(); }
-    function showKeyboard(show){ const kb=document.getElementById('osk'); if (!kb) return; kb.classList.toggle('show', !!show); kb.setAttribute('aria-hidden', show? 'false':'true'); }
+    function showKeyboard(show){ const kb=document.getElementById('osk'); if (!kb) return; const on=!!show; kb.classList.toggle('show', on); kb.setAttribute('aria-hidden', on? 'false':'true'); try{ document.body.classList.toggle('osk-open', on); }catch{} }
     function clearBuffer(){ state.buffer=''; renderBuffer(); }
 
     async function ensureMicPermission(){ if (!navigator.mediaDevices?.getUserMedia) return true; try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach(t=>t.stop()); return true; } catch { return false; } }
