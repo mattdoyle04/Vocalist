@@ -93,6 +93,24 @@
     .stat-label{font-size:11px;letter-spacing:.08em;color:#64748b}
     .stat-value{font-weight:800;font-size:18px;letter-spacing:.04em}
     .summary-words{margin-top:8px}
+
+    /* Mobile responsive adjustments */
+    @media (max-width: 480px){
+      /* Header section breathing room and tighter letter bubble */
+      .section.today{ padding:22px; }
+      .letter{ width:68px; height:68px; font-size:38px; }
+      .theme .value{ font-size:22px; }
+      .compact-controls{ right:10px; top:10px; }
+      .timer-mini{ min-width:70px; height:32px; font-size:13px; }
+      .mic-mini{ width:36px; height:36px; font-size:17px; }
+
+      /* Giant input sizing so long words fit on small screens */
+      .giant-input{ font-size:54px; height:100px; line-height:100px; letter-spacing:.06em; }
+      .placeholder-letter{ width:140px; height:140px; font-size:72px; }
+
+      /* Modal summary word list readability */
+      .wordstream li,.wordstream span{ font-size:11px; }
+    }
   </style>
 
   <script>
