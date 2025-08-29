@@ -90,7 +90,13 @@
       /* Compact tables on phones to avoid horizontal scroll */
       #dlg-history .tbl{ table-layout: fixed; }
       #dlg-history .tbl th, #dlg-history .tbl td{ padding:8px; font-size:12px; white-space:normal; word-break:break-word; }
+      #dlg-history .tbl td:nth-child(2){ font-size:11px; letter-spacing:.02em; font-weight:700; }
+      #dlg-leaderboard .tbl{ table-layout: fixed; width:100%; }
       #dlg-leaderboard .tbl th, #dlg-leaderboard .tbl td{ padding:8px; font-size:12px; }
+      #dlg-leaderboard .tbl th:nth-child(1), #dlg-leaderboard .tbl td:nth-child(1){ width:44px; text-align:right; }
+      #dlg-leaderboard .tbl th:nth-child(3), #dlg-leaderboard .tbl td:nth-child(3),
+      #dlg-leaderboard .tbl th:nth-child(4), #dlg-leaderboard .tbl td:nth-child(4){ width:64px; text-align:right; white-space:nowrap; }
+      #dlg-leaderboard .tbl td:nth-child(2){ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     }
   </style>
 </head>

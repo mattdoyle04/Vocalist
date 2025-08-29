@@ -6,14 +6,14 @@
     <hr class="modal-divider" />
     {% set rows = leaders|default([]) %}
     {% if rows and rows|length > 0 %}
-      <div style="max-height:60vh; overflow:auto;">
+      <div style="max-height:60vh; overflow-y:auto; overflow-x:hidden;">
         <table class="tbl">
           <thead>
             <tr>
               <th>Rank</th>
               <th>Player</th>
-              <th>Score</th>
-              <th>Games</th>
+              <th>Pts</th>
+              <th>G</th>
             </tr>
           </thead>
           <tbody>
