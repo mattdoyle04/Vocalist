@@ -158,7 +158,8 @@
       const dailyLetter = (document.getElementById('letterBubble').textContent||'').toLowerCase();
       if (state.words.has(w)) return fromTyping && showTinyHint("DUPLICATE");
       if (w.length < 3)      return fromTyping && showTinyHint("MIN LENGTH");
-      if (!w.startswith(dailyLetter)) return fromTyping && showTinyHint(`MUST START “${dailyLetter.toUpperCase()}”`);
+      // Ensure JS string API is used (not Python's startswith)
+      if (!w.startsWith(dailyLetter)) return fromTyping && showTinyHint(`MUST START “${dailyLetter.toUpperCase()}”`);
       let server;
       try { const r = await fetch('/api/check-word',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ word:w })}); server = await r.json(); }
       catch { return fromTyping && showTinyHint("CHECK FAILED"); }
