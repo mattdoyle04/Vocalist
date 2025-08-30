@@ -179,7 +179,27 @@
     async function ensureMicPermission(){ if (!navigator.mediaDevices?.getUserMedia) return true; try { const s = await navigator.mediaDevices.getUserMedia({ audio: true }); s.getTracks().forEach(t=>t.stop()); return true; } catch { return false; } }
     document.getElementById('micMini').addEventListener("click", async ()=>{ if (!state.running) { showTinyHint("PRESS START"); return; } if(!state.voice){ const ok=await ensureMicPermission(); if(!ok) return; } state.voice=!state.voice; if(state.voice) enterVoiceMode(); else exitVoiceMode(); });
 
-    function ensureSpeech(){ const SR=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SR) return null; const r=new SR(); r.continuous=true; r.interimResults=true; r.lang="en-AU"; r.onresult=(e)=>{ if (!state.running) return; for (let i=e.resultIndex;i<e.results.length;i++){ const res=e.results[i]; if(!res.isFinal) continue; const t=(res[0]?.transcript||"").trim(); if(!t) continue; const live=document.getElementById('liveTranscript'); if (live && live.style.display==="none") live.style.display="block"; const parts=t.toLowerCase().split(/\s+/); parts.forEach(w=>acceptCandidate(w,false)); const last=parts[parts.length-1]||""; if (live) live.textContent=last.toUpperCase(); } }; r.onerror=_=>{}; r.onend=()=>{ if(state.voice && state.running && state.remaining>0) try{ r.start(); }catch{} }; return r; }
+    function ensureSpeech(){
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition; if(!SR) return null;
+      const r = new SR(); r.continuous = true; r.interimResults = true; r.lang = (navigator.language || "en-US");
+      r.onresult = (e) => {
+        if (!state.running) return;
+        for (let i = e.resultIndex; i < e.results.length; i++){
+          const res = e.results[i];
+          const t = (res[0]?.transcript || "").trim(); if (!t) continue;
+          const parts = t.toLowerCase().split(/\s+/);
+          // For interim results, avoid submitting the last (possibly partial) token
+          const take = res.isFinal ? parts : parts.slice(0, Math.max(0, parts.length - 1));
+          take.forEach(w => acceptCandidate(w, false));
+          const last = parts[parts.length-1] || "";
+          const live = document.getElementById('liveTranscript');
+          if (live) { if (live.style.display === "none") live.style.display = "block"; live.textContent = last.toUpperCase(); }
+        }
+      };
+      r.onerror = _=>{};
+      r.onend = () => { if (state.voice && state.running && state.remaining > 0) try { r.start(); } catch {} };
+      return r;
+    }
     function enterVoiceMode(){ const live=document.getElementById('liveTranscript'); if (live){ live.textContent=""; live.style.display="none"; } document.getElementById('typeInput').style.display="none"; document.getElementById('modePill').style.display="inline-block"; showKeyboard(false); if(!state.sr) state.sr=ensureSpeech(); if(!state.sr){ showTinyHint("VOICE NOT SUPPORTED"); state.voice=false; return exitVoiceMode(); } state.listening=true; setMicVisual(true); try{ state.sr.start(); }catch{}; }
     function exitVoiceMode(){ document.getElementById('typeInput').style.display="block"; document.getElementById('liveTranscript').style.display="none"; document.getElementById('modePill').style.display="none"; if(state.listening){ state.listening=false; setMicVisual(false); try{ state.sr.stop(); }catch{} } if (state.running && isSmallScreen()) showKeyboard(true); }
 
@@ -193,6 +213,16 @@
       const session = await window.ensureAuth({ force: true });
       if (!session) return;
       if (session.access_token) window.__supabase_token = session.access_token;
+      // Default to voice on: request mic permission up-front and only enable voice if SpeechRecognition exists
+      try {
+        const hasSR = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
+        if (hasSR) {
+          const ok = await ensureMicPermission();
+          state.voice = !!ok;
+        } else {
+          state.voice = false;
+        }
+      } catch { state.voice = false; }
       startRound();
     });
 
