@@ -126,6 +126,7 @@
     .osk .row{ display:flex; align-items:center; gap:3px; margin:6px 0; }
     .osk button{ flex:1 1 0; min-width:0; height:58px; padding:0 6px; border-radius:12px; border:1px solid #e2e8f0; background:#fff; font-weight:800; letter-spacing:.04em; font-size:16px; box-shadow:var(--shadow); color:var(--accent); user-select:none; -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
     .osk button.wide{ flex:1.6 1 0; }
+    .osk button[data-action="enter"]{ font-size:14px; }
     /* Extra-tight layout for very small screens */
     @media (max-width: 360px){
       .osk{ padding-left:8px; padding-right:8px; }
@@ -172,7 +173,17 @@
 
     // --- On-screen keyboard helpers ---
     function isSmallScreen(){ return window.matchMedia('(max-width: 480px)').matches; }
-    function renderBuffer(){ const ti=document.getElementById('typeInput'); if (ti) ti.value=(state.buffer||'').toUpperCase(); }
+    function fitGiantInput(){
+      const ti = document.getElementById('typeInput'); if (!ti) return;
+      if (!fitGiantInput._base){ fitGiantInput._base = parseFloat(getComputedStyle(ti).fontSize) || 96; }
+      const base = fitGiantInput._base; const min = 28; let size = base;
+      ti.style.fontSize = base + 'px';
+      // Shrink until it fits
+      while (ti.scrollWidth > ti.clientWidth - 8 && size > min){ size -= 2; ti.style.fontSize = size + 'px'; }
+      // Try to grow back up a bit if there is room (when user deletes)
+      while (size < base && ti.scrollWidth <= ti.clientWidth - 8){ size += 2; ti.style.fontSize = size + 'px'; if (ti.scrollWidth > ti.clientWidth - 8){ size -= 2; ti.style.fontSize = size + 'px'; break; } }
+    }
+    function renderBuffer(){ const ti=document.getElementById('typeInput'); if (ti) { ti.value=(state.buffer||'').toUpperCase(); fitGiantInput(); } }
     function showKeyboard(show){ const kb=document.getElementById('osk'); if (!kb) return; const on=!!show; kb.classList.toggle('show', on); kb.setAttribute('aria-hidden', on? 'false':'true'); try{ document.body.classList.toggle('osk-open', on); }catch{} }
     function clearBuffer(){ state.buffer=''; renderBuffer(); }
 
@@ -208,21 +219,15 @@
     async function syncToday(advance=false){ try{ const r=await fetch('/api/today' + (advance ? '?advance=1' : '')); if(!r.ok) return; const d=await r.json(); if(d.letter) document.getElementById('letterBubble').textContent=d.letter.toUpperCase(); if(d.theme) document.getElementById('themeHeading').textContent=d.theme.toUpperCase(); window.__letterBonus = (d.letterBonus|0); window.__roundSeconds  = (d.roundSeconds|0)}catch{} }
 
     document.getElementById('typeInput').addEventListener("keydown",(e)=>{ if(e.key!=="Enter") return; e.preventDefault(); if (!state.running) { showTinyHint("PRESS START"); return; } const v=(isSmallScreen()? state.buffer : e.target.value).trim(); if(!v) return; acceptCandidate(v,true); clearBuffer(); e.target.value=""; });
+    document.getElementById('typeInput').addEventListener('input', ()=>{ if (!isSmallScreen()) fitGiantInput(); });
+    window.addEventListener('resize', ()=>{ fitGiantInput(); });
 
     document.getElementById('startBtn').addEventListener("click", async () => {
       const session = await window.ensureAuth({ force: true });
       if (!session) return;
       if (session.access_token) window.__supabase_token = session.access_token;
-      // Default to voice on: request mic permission up-front and only enable voice if SpeechRecognition exists
-      try {
-        const hasSR = !!(window.SpeechRecognition || window.webkitSpeechRecognition);
-        if (hasSR) {
-          const ok = await ensureMicPermission();
-          state.voice = !!ok;
-        } else {
-          state.voice = false;
-        }
-      } catch { state.voice = false; }
+      // Default to typed input on start (no mic pre-prompt)
+      state.voice = false;
       startRound();
     });
 
