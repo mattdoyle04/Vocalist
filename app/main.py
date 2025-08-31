@@ -31,6 +31,11 @@ app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 
 TZ = timezone(timedelta(hours=10))  # Australia/Melbourne
 BASE_DIR = Path(__file__).resolve().parent
+ROOT_DIR = BASE_DIR.parent
+try:
+    VERSION = (ROOT_DIR / "VERSION").read_text(encoding="utf-8").strip()
+except Exception:
+    VERSION = "0.0.0"
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 SUPABASE_URL  = (os.getenv("SUPABASE_URL", "") or "").strip().rstrip("/")
@@ -44,6 +49,7 @@ templates.env.globals.update({
     "SUPABASE_URL": SUPABASE_URL,
     "SUPABASE_ANON": SUPABASE_ANON,
     "SITE_URL": SITE_URL,
+    "VERSION": VERSION,
 })
 
 # ---------------- Minimal Supabase JWT dependency ----------------

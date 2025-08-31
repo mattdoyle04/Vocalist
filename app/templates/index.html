@@ -120,6 +120,12 @@
       body.osk-open main#page{ padding-bottom: calc(220px + env(safe-area-inset-bottom)); }
     }
 
+    /* Pre-start and Voice mode: increase composer height on mobile (no OSK) */
+    @media (max-width: 480px){
+      body.prestart .composer,
+      body.voice .composer{ min-height: 280px; }
+    }
+
     /* On-screen keyboard (mobile only) */
     .osk{ display:none; position:fixed; left:0; right:0; bottom:0; z-index:15; background:#f8fafc; border-top:1px solid #E2E8F0; padding:12px calc(12px + env(safe-area-inset-left)) calc(12px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-right)); box-shadow:0 -8px 24px rgba(2,6,23,.08); }
     .osk .row{ display:flex; align-items:center; gap:3px; margin:6px 0; }
@@ -159,6 +165,7 @@
     function showStartPlaceholder(show){
       const ph=document.getElementById('startPlaceholder'), ti=document.getElementById('typeInput');
       if(!ph||!ti) return; ph.style.display=show?'grid':'none'; ti.style.visibility=show?'hidden':'visible';
+      try{ document.body.classList.toggle('prestart', !!show); }catch{}
     }
     async function bootPlaceholder(){
       const session = await window.ensureAuth({force:false});
@@ -175,12 +182,13 @@
     function fitGiantInput(){
       const ti = document.getElementById('typeInput'); if (!ti) return;
       const buf = (state.buffer || ti.value || '');
-      if (!fitGiantInput._base){ fitGiantInput._base = parseFloat(getComputedStyle(ti).fontSize) || 48; }
-      const base = fitGiantInput._base; const min = 24;
-      // Start at 48px (base). After 10 chars, gradually reduce by 2px per extra char
-      let target = buf.length <= 10 ? base : Math.max(min, base - (buf.length - 10) * 2);
+      const base = 48; const min = 24;
+      // If 10 or fewer chars, lock at base size and exit
+      if (buf.length <= 10){ ti.style.fontSize = base + 'px'; return; }
+      // After 10 chars, reduce by 2px per extra char
+      let target = Math.max(min, base - (buf.length - 10) * 2);
       ti.style.fontSize = target + 'px';
-      // Ensure it fits: shrink stepwise if needed
+      // Safety: if still overflowing, shrink stepwise
       while (ti.scrollWidth > ti.clientWidth - 8 && target > min){ target -= 1; ti.style.fontSize = target + 'px'; }
     }
     function renderBuffer(){ const ti=document.getElementById('typeInput'); if (ti) { ti.value=(state.buffer||'').toUpperCase(); fitGiantInput(); } }
@@ -211,8 +219,8 @@
       r.onend = () => { if (state.voice && state.running && state.remaining > 0) try { r.start(); } catch {} };
       return r;
     }
-    function enterVoiceMode(){ const live=document.getElementById('liveTranscript'); if (live){ live.textContent=""; live.style.display="none"; } document.getElementById('typeInput').style.display="none"; document.getElementById('modePill').style.display="inline-block"; showKeyboard(false); if(!state.sr) state.sr=ensureSpeech(); if(!state.sr){ showTinyHint("VOICE NOT SUPPORTED"); state.voice=false; return exitVoiceMode(); } state.listening=true; setMicVisual(true); try{ state.sr.start(); }catch{}; }
-    function exitVoiceMode(){ document.getElementById('typeInput').style.display="block"; document.getElementById('liveTranscript').style.display="none"; document.getElementById('modePill').style.display="none"; if(state.listening){ state.listening=false; setMicVisual(false); try{ state.sr.stop(); }catch{} } if (state.running && isSmallScreen()) showKeyboard(true); }
+    function enterVoiceMode(){ const live=document.getElementById('liveTranscript'); if (live){ live.textContent=""; live.style.display="none"; } document.getElementById('typeInput').style.display="none"; document.getElementById('modePill').style.display="inline-block"; showKeyboard(false); try{ document.body.classList.add('voice'); }catch{} if(!state.sr) state.sr=ensureSpeech(); if(!state.sr){ showTinyHint("VOICE NOT SUPPORTED"); state.voice=false; return exitVoiceMode(); } state.listening=true; setMicVisual(true); try{ state.sr.start(); }catch{}; }
+    function exitVoiceMode(){ document.getElementById('typeInput').style.display="block"; document.getElementById('liveTranscript').style.display="none"; document.getElementById('modePill').style.display="none"; try{ document.body.classList.remove('voice'); }catch{} if(state.listening){ state.listening=false; setMicVisual(false); try{ state.sr.stop(); }catch{} } if (state.running && isSmallScreen()) showKeyboard(true); }
 
     (function wrapFetch(){ const _fetch = window.fetch.bind(window); window.fetch = async (input, init = {}) => { const url = (typeof input === 'string') ? input : (input?.url || ''); const sameOrigin = !/^https?:\/\//i.test(url) || url.startsWith(location.origin); if (sameOrigin) { if (!window.__supabase_token) await (window.syncSupabaseToken?.() || Promise.resolve()); init.headers = new Headers(init.headers || {}); if (window.__supabase_token && !init.headers.has('Authorization')) { init.headers.set('Authorization', 'Bearer ' + window.__supabase_token); } } return _fetch(input, init); }; })();
 
@@ -278,6 +286,7 @@
       const ti=document.getElementById('typeInput'); ti.disabled=true;
       if(state.listening){ state.listening=false; setMicVisual(false); try{ state.sr.stop(); }catch{} }
       showKeyboard(false);
+      try{ document.body.classList.remove('voice'); }catch{}
       const gameSeconds = Math.max(1, Math.round((Date.now()-(state.startedAt||Date.now()))/1000));
       const letter = document.getElementById('letterBubble').textContent || '—';
       const theme  = document.getElementById('themeHeading').textContent || '—';
