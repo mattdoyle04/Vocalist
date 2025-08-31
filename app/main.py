@@ -32,10 +32,13 @@ app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
 TZ = timezone(timedelta(hours=10))  # Australia/Melbourne
 BASE_DIR = Path(__file__).resolve().parent
 ROOT_DIR = BASE_DIR.parent
-try:
-    VERSION = (ROOT_DIR / "VERSION").read_text(encoding="utf-8").strip()
-except Exception:
-    VERSION = "0.0.0"
+
+def get_version() -> str:
+    """Return the current VERSION file contents (read per request render)."""
+    try:
+        return (ROOT_DIR / "VERSION").read_text(encoding="utf-8").strip()
+    except Exception:
+        return "0.0.0"
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 SUPABASE_URL  = (os.getenv("SUPABASE_URL", "") or "").strip().rstrip("/")
@@ -49,7 +52,8 @@ templates.env.globals.update({
     "SUPABASE_URL": SUPABASE_URL,
     "SUPABASE_ANON": SUPABASE_ANON,
     "SITE_URL": SITE_URL,
-    "VERSION": VERSION,
+    # Expose a callable so templates always show the latest version
+    "VERSION": get_version,
 })
 
 # ---------------- Minimal Supabase JWT dependency ----------------
@@ -160,7 +164,7 @@ if SUPABASE_URL and SUPABASE_SERVICE_ROLE:
 
 # ---------------- Themes / validation ----------------
 DATA_DIR = BASE_DIR / "data" / "themes"
-THEMES: List[str] = ["animals", "food", "colors", "sports", "countries", "dogbreeds"]
+THEMES: List[str] = ["animals", "food", "countries"]
 _theme_cache: Dict[str, Set[str]] = {}
 
 def _norm_word(s: str) -> str:

@@ -123,7 +123,7 @@
   <!-- NAV -->
   <header class="navbar">
     <div class="container nav-inner">
-      <div class="brand">Vocalist <span class="version">v0.1.0</span></div>
+      <div class="brand">Vocalist <span class="version">v{{ VERSION() }}</span></div>
       <button class="nav-link" id="navMenuBtn">Menu</button>
       <nav class="nav-right">
         <button class="nav-link" hx-get="/my-stats"    hx-target="#modalHost" hx-swap="beforeend">Stats</button>
