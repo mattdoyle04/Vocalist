@@ -113,6 +113,15 @@
       .wordstream li,.wordstream span{ font-size:11px; }
       /* Remove separator line above Start button on mobile */
       .bottombar{ border-top:0; }
+
+      /* Bigger, centered Start button before game starts */
+      body:not(.running) .bottombar{ justify-content:center; }
+      body:not(.running) .bottombar .actions{ width:100%; display:flex; justify-content:center; }
+      body:not(.running) #startBtn{
+        font-size:20px; font-weight:800; letter-spacing:.06em;
+        padding:18px 28px; height:56px; border-radius:16px;
+        width:clamp(200px, 70vw, 340px);
+      }
     }
 
     /* Provide bottom breathing room when OSK visible so input + words remain visible */
@@ -120,10 +129,9 @@
       body.osk-open main#page{ padding-bottom: calc(220px + env(safe-area-inset-bottom)); }
     }
 
-    /* Pre-start and Voice mode: increase composer height on mobile (no OSK) */
+    /* When game isn't running (no OSK, incl. prestart and voice), make composer taller on mobile */
     @media (max-width: 480px){
-      body.prestart .composer,
-      body.voice .composer{ min-height: 280px; }
+      body:not(.running) .composer{ min-height: 280px; }
     }
 
     /* On-screen keyboard (mobile only) */
@@ -170,6 +178,7 @@
     async function bootPlaceholder(){
       const session = await window.ensureAuth({force:false});
       showStartPlaceholder(!!session && !state.running);
+      try{ document.body.classList.remove('running'); }catch{}
       window.sb?.auth?.onAuthStateChange((_e,sess)=>{ if(!state.running) showStartPlaceholder(!!sess); });
     }
     document.addEventListener('DOMContentLoaded', bootPlaceholder);
@@ -270,7 +279,7 @@
       await syncAndRevealToday();
       const ti=document.getElementById('typeInput'); ti.placeholder=document.getElementById('letterBubble').textContent; ti.disabled=false; document.getElementById('micMini').disabled=false;
       if(startRound._ul) startRound._ul.innerHTML="";
-      state.words.clear(); state.onTheme.clear(); state.offTheme.clear(); state.invalid=0; state.startedAt=Date.now(); state.running=true; clearBuffer(); renderBuffer();
+      state.words.clear(); state.onTheme.clear(); state.offTheme.clear(); state.invalid=0; state.startedAt=Date.now(); state.running=true; try{ document.body.classList.add('running'); }catch{} clearBuffer(); renderBuffer();
       document.getElementById('startBtn').style.display="none"; setTimer(30);
       if(state.voice) { enterVoiceMode(); }
       else {
@@ -282,7 +291,7 @@
     }
 
     async function endRound(){
-      clearInterval(state.timerId); state.running=false; document.getElementById('startBtn').style.display="inline-block";
+      clearInterval(state.timerId); state.running=false; try{ document.body.classList.remove('running'); }catch{} document.getElementById('startBtn').style.display="inline-block";
       const ti=document.getElementById('typeInput'); ti.disabled=true;
       if(state.listening){ state.listening=false; setMicVisual(false); try{ state.sr.stop(); }catch{} }
       showKeyboard(false);
