@@ -33,7 +33,6 @@
   <footer class="bottombar">
     <div class="actions">
       <button id="startBtn" class="btn btn-primary">START</button>
-      <button id="finishBtn" class="btn btn-ghost" style="display:none">FINISH</button>
     </div>
   </footer>
 
@@ -175,13 +174,14 @@
     function isSmallScreen(){ return window.matchMedia('(max-width: 480px)').matches; }
     function fitGiantInput(){
       const ti = document.getElementById('typeInput'); if (!ti) return;
+      const buf = (state.buffer || ti.value || '');
       if (!fitGiantInput._base){ fitGiantInput._base = parseFloat(getComputedStyle(ti).fontSize) || 96; }
-      const base = fitGiantInput._base; const min = 28; let size = base;
-      ti.style.fontSize = base + 'px';
-      // Shrink until it fits
-      while (ti.scrollWidth > ti.clientWidth - 8 && size > min){ size -= 2; ti.style.fontSize = size + 'px'; }
-      // Try to grow back up a bit if there is room (when user deletes)
-      while (size < base && ti.scrollWidth <= ti.clientWidth - 8){ size += 2; ti.style.fontSize = size + 'px'; if (ti.scrollWidth > ti.clientWidth - 8){ size -= 2; ti.style.fontSize = size + 'px'; break; } }
+      const base = fitGiantInput._base; const min = 24; const doubled = base * 2;
+      // Start at double size; after 10 chars, scale down progressively
+      let target = buf.length <= 10 ? doubled : Math.max(min, doubled - (buf.length - 10) * 8);
+      ti.style.fontSize = target + 'px';
+      // Ensure it fits: shrink stepwise if needed
+      while (ti.scrollWidth > ti.clientWidth - 8 && target > min){ target -= 2; ti.style.fontSize = target + 'px'; }
     }
     function renderBuffer(){ const ti=document.getElementById('typeInput'); if (ti) { ti.value=(state.buffer||'').toUpperCase(); fitGiantInput(); } }
     function showKeyboard(show){ const kb=document.getElementById('osk'); if (!kb) return; const on=!!show; kb.classList.toggle('show', on); kb.setAttribute('aria-hidden', on? 'false':'true'); try{ document.body.classList.toggle('osk-open', on); }catch{} }
@@ -231,7 +231,7 @@
       startRound();
     });
 
-    document.getElementById('finishBtn').addEventListener("click", endRound);
+    // Finish button removed (no early end)
 
     function ensureAcceptedUI(){ if (startRound._ul) return; const section=document.createElement("section"); section.className="section"; const ul=document.createElement("ul"); ul.className="wordstream"; section.append(ul); document.getElementById('acceptedSectionAnchor').replaceWith(section); startRound._ul=ul; }
 
@@ -263,7 +263,7 @@
       const ti=document.getElementById('typeInput'); ti.placeholder=document.getElementById('letterBubble').textContent; ti.disabled=false; document.getElementById('micMini').disabled=false;
       if(startRound._ul) startRound._ul.innerHTML="";
       state.words.clear(); state.onTheme.clear(); state.offTheme.clear(); state.invalid=0; state.startedAt=Date.now(); state.running=true; clearBuffer(); renderBuffer();
-      document.getElementById('finishBtn').style.display="inline-block"; document.getElementById('startBtn').style.display="none"; setTimer(30);
+      document.getElementById('startBtn').style.display="none"; setTimer(30);
       if(state.voice) { enterVoiceMode(); }
       else {
         exitVoiceMode();
@@ -274,7 +274,7 @@
     }
 
     async function endRound(){
-      clearInterval(state.timerId); state.running=false; document.getElementById('finishBtn').style.display="none"; document.getElementById('startBtn').style.display="inline-block";
+      clearInterval(state.timerId); state.running=false; document.getElementById('startBtn').style.display="inline-block";
       const ti=document.getElementById('typeInput'); ti.disabled=true;
       if(state.listening){ state.listening=false; setMicVisual(false); try{ state.sr.stop(); }catch{} }
       showKeyboard(false);

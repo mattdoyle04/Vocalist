@@ -19,6 +19,7 @@
     .navbar{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);z-index:20}
     .nav-inner{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 0}
     .brand{font-weight:800;letter-spacing:.08em}
+    .brand .version{ font-size:10px; font-weight:700; color:var(--muted); margin-left:6px; letter-spacing:.08em }
     .nav-right{display:flex;align-items:center;gap:18px}
 
     /* Mobile nav */
@@ -120,7 +121,7 @@
   <!-- NAV -->
   <header class="navbar">
     <div class="container nav-inner">
-      <div class="brand">Vocalist</div>
+      <div class="brand">Vocalist <span class="version">v0.1.0</span></div>
       <button class="nav-link" id="navMenuBtn">Menu</button>
       <nav class="nav-right">
         <button class="nav-link" hx-get="/my-stats"    hx-target="#modalHost" hx-swap="beforeend">Stats</button>
