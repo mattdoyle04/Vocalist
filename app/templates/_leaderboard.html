@@ -11,16 +11,14 @@
           <thead>
             <tr>
               <th>Rank</th>
-              <th>Player</th>
               <th>Pts</th>
               <th>G</th>
             </tr>
           </thead>
           <tbody>
             {% for p in rows %}
-              <tr>
+              <tr{% if p.id == me_id %} class="me"{% endif %}>
                 <td>{{ loop.index }}</td>
-                <td>{{ p.name|default("Player") }}</td>
                 <td>{{ p.score|default(0) }}</td>
                 <td>{{ p.games|default(0) }}</td>
               </tr>

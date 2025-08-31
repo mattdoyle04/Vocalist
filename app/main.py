@@ -258,9 +258,15 @@ def sb_upsert_player_from_user(user: Dict[str,Any]) -> Optional[Dict[str,Any]]:
     if not SB: return None
     supa_uid = (user or {}).get("sub") or (user or {}).get("id")
     if not supa_uid: return None
+    # Privacy: never store email as display name; generate anonymized label
+    try:
+        tag = hex(_hash32(str(supa_uid)))[2:6].upper()
+    except Exception:
+        tag = "0000"
+    anon_name = f"Player #{tag}"
     obj = {
         "user_uid": str(supa_uid),
-        "name": (user or {}).get("email") or "Player",
+        "name": anon_name,
         "auth_provider": ((user or {}).get("app_metadata") or {}).get("provider","none"),
         "created_at": datetime.now(TZ).replace(tzinfo=None).isoformat(sep=" ")
     }
@@ -364,8 +370,20 @@ def sb_leaderboard(limit:int=10) -> List[Dict[str,Any]]:
     if not top: return []
     ids = ",".join(str(pid) for pid,_ in top)
     plist = SB.get("/player", {"select":"id,name","id":f"in.({ids})"}) or []
-    name_by_id = {int(p["id"]): (p.get("name") or "Player") for p in plist}
-    leaders = [{"name": name_by_id.get(pid,"Player"), "score": total, "games": counts.get(pid, 0)} for pid,total in top]
+    def anonize(pid: int, name: str) -> str:
+        n = (name or "").strip()
+        # If looks like an email or empty, replace with anonymized tag
+        if ("@" in n) or not n:
+            tag = hex(_hash32(str(pid)))[2:6].upper()
+            return f"Player #{tag}"
+        return n
+    name_by_id = {int(p["id"]): anonize(int(p["id"]), p.get("name") or "") for p in plist}
+    leaders = [{
+        "id": pid,
+        "name": name_by_id.get(pid, anonize(pid, "")),
+        "score": total,
+        "games": counts.get(pid, 0)
+    } for pid,total in top]
     return leaders
 
 # ---------------- Pages ----------------
@@ -408,8 +426,14 @@ def history(request: Request, user: Dict[str,Any] = Depends(require_user)):
 
 @app.get("/leaderboard", response_class=HTMLResponse)
 def leaderboard(request: Request, user: Dict[str,Any] = Depends(require_user)):
-    ctx = {"request": request, "leaders": []}
+    ctx = {"request": request, "leaders": [], "me_id": 0}
     try:
+        # Identify current player's numeric id for marking "YOU" in UI
+        try:
+            player = sb_get_player_by_uid((user or {}).get("sub") or (user or {}).get("id"))
+            if player: ctx["me_id"] = int(player.get("id") or 0)
+        except Exception:
+            ctx["me_id"] = 0
         ctx["leaders"] = sb_leaderboard(10)
     except Exception as e:
         logger.exception("leaderboard REST error: %s", e)

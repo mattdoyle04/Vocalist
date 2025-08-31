@@ -82,6 +82,9 @@
     /* Utility */
     .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 
+    /* Highlight current user on leaderboard */
+    #dlg-leaderboard .tbl tr.me td{ background: rgba(14,124,134,.08); font-weight:700; }
+
     /* Mobile tweaks */
     @media (max-width: 480px){
       /* Roomier header container padding on mobile */
@@ -99,11 +102,10 @@
       #dlg-history .tbl td:nth-child(2){ font-size:11px; letter-spacing:.02em; font-weight:700; }
       #dlg-leaderboard .tbl{ table-layout: fixed; width:100%; }
       #dlg-leaderboard .tbl th, #dlg-leaderboard .tbl td{ padding:8px; font-size:12px; }
-      /* Keep columns tight while allowing names to truncate */
-      #dlg-leaderboard .tbl th:nth-child(1), #dlg-leaderboard .tbl td:nth-child(1){ width:44px; }
-      #dlg-leaderboard .tbl th:nth-child(3), #dlg-leaderboard .tbl td:nth-child(3),
-      #dlg-leaderboard .tbl th:nth-child(4), #dlg-leaderboard .tbl td:nth-child(4){ width:64px; white-space:nowrap; }
-      #dlg-leaderboard .tbl td:nth-child(2){ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      /* Updated for 3-column layout: Rank | Pts | G */
+      #dlg-leaderboard .tbl th:nth-child(1), #dlg-leaderboard .tbl td:nth-child(1){ width:64px; white-space:nowrap; }
+      #dlg-leaderboard .tbl th:nth-child(2), #dlg-leaderboard .tbl td:nth-child(2){ width:64px; white-space:nowrap; }
+      #dlg-leaderboard .tbl th:nth-child(3), #dlg-leaderboard .tbl td:nth-child(3){ width:64px; white-space:nowrap; }
     }
 
     /* Center table text in History and Leaderboard */
@@ -199,8 +201,9 @@
       if (loginBtn)  loginBtn.style.display  = authed ? 'none' : '';
       if (logoutBtn) logoutBtn.style.display = authed ? '' : 'none';
       if (userEl) {
-        userEl.style.display = authed ? '' : 'none';
-        userEl.textContent = authed ? (user?.email || 'Signed in') : '';
+        // Privacy: never show any user-identifying text in the navbar
+        userEl.style.display = 'none';
+        userEl.textContent = '';
       }
     }
 
