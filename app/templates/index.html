@@ -155,6 +155,8 @@
   </style>
 
   <script>
+    // Page script moved to static/js/app.js
+    if (false) {
     // --- Auth shim (unchanged) ---
     if (typeof window.ensureAuth !== 'function') {
       window.ensureAuth = async function ensureAuth(options = {}) {
@@ -324,6 +326,7 @@
     async function submitRun(payload){
       try { const resp = await fetch('/api/submit-run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if (!resp.ok) { document.getElementById('sumScore').textContent='—'; return; } const d = await resp.json(); if (typeof d.score === 'number') { document.getElementById('sumScore').textContent = String(d.score); if (typeof d.bonus_per_word === 'number') document.getElementById('sumBonus').textContent = '+' + d.bonus_per_word; } refreshLeaderboardIfOpen(); } catch { document.getElementById('sumScore').textContent='—'; }
     }
+    }
   </script>
 
   <!-- On-screen keyboard (rendered once; toggled on mobile) -->
@@ -365,6 +368,8 @@
   </div>
 
   <script>
+    // Page script moved to static/js/app.js
+    if (false) {
     // Wire OSK events
     (function(){
       const kb = document.getElementById('osk');
@@ -381,7 +386,11 @@
         }
       });
     })();
+    }
   </script>
 </div>
 
+{% endblock %}
+{% block extra_scripts %}
+  <script defer src="{{ url_for('static', path='js/app.js') }}?v={{ VERSION() }}"></script>
 {% endblock %}

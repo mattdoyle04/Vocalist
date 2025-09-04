@@ -166,7 +166,10 @@
   <!-- Scripts -->
   <script src="https://unpkg.com/htmx.org@1.9.12"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script defer src="{{ url_for('static', path='js/base.js') }}?v={{ VERSION() }}"></script>
   <script>
+    // Inline base script moved to static/js/base.js
+    if (false) {
     // === Supabase bootstrap via data-* from server ===
     const SUPABASE_URL  = document.body.dataset.supabaseUrl || "";
     const SUPABASE_ANON = document.body.dataset.supabaseAnon || "";
@@ -322,6 +325,7 @@
         return _fetch(input, init);
       };
     })();
+    }
   </script>
 
   {% block extra_scripts %}{% endblock %}
