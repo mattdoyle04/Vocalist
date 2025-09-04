@@ -1,0 +1,71 @@
+:root{ --section-gap:28px; --bg:#FFFFFF; --ink:#1A202C; --ink-2:#4A5568; --card:#FFF; --accent:#0E7C86; --shadow:0 8px 24px rgba(26,32,44,.06); --radius:24px }
+.section{ position:relative; padding:18px; background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); margin:0 auto var(--section-gap) auto; }
+.today-inner{display:grid;grid-template-columns:auto 1fr;gap:16px;align-items:center}
+.letter{width:84px;height:84px;border-radius:999px;display:grid;place-items:center;background:var(--accent);color:#fff;font-weight:800;font-size:48px}
+.theme .label{color:var(--ink-2);font-size:12px;letter-spacing:.08em}
+.theme .value{margin:.25rem 0 0;font-size:28px;letter-spacing:.04em}
+.compact-controls{position:absolute;right:14px;top:14px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.timer-mini{min-width:78px;height:34px;padding:0 10px;border-radius:999px;background:#fff;border:1px solid #E2E8F0;display:inline-grid;place-items:center;font-weight:800;font-size:14px;letter-spacing:.06em}
+.mic-mini{width:38px;height:38px;border-radius:999px;border:0;background:#fff;display:inline-grid;place-items:center;font-size:18px;cursor:pointer;box-shadow:var(--shadow)}
+.mic-mini[aria-pressed="false"]{opacity:.9}
+.composer{position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;min-height:300px}
+.giant-input{width:100%;max-width:900px;text-align:center;font-size:48px;font-weight:800;color:var(--ink);height:140px;line-height:140px;letter-spacing:.08em;border:0;outline:0;border-radius:16px;text-transform:uppercase;background:#fff;box-shadow:none}
+.placeholder-letter{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:180px;height:180px;border-radius:999px;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:800;font-size:96px;letter-spacing:.06em;box-shadow:var(--shadow)}
+.transcript{width:100%;max-width:900px;text-align:center;font-size:32px;font-weight:700;color:#222;min-height:40px;letter-spacing:.04em}
+.mode-pill{font-size:12px;color:#0f172a;background:#e2f4f6;border:1px solid #c7ecef;padding:2px 8px;border-radius:999px}
+.tiny-hint{height:0;font-size:12px;color:#C53030;background:transparent;font-weight:700;padding:0 8px;border-radius:999px;opacity:0;transform:translateY(-8px);transition:opacity .2s,transform .2s;margin-top:-8px;text-transform:uppercase}
+.tiny-hint.show{height:auto;opacity:1;transform:translateY(0);margin-top:0}
+.wordstream{display:flex;flex-wrap:wrap;gap:8px;margin:0;padding:2px;list-style:none}
+.wordstream li,.wordstream span{font-weight:700;letter-spacing:.03em;font-size:12px;color:#475569;line-height:1.1;margin:0}
+.wordstream .off-theme{opacity:.6}
+.bottombar{position:sticky;bottom:0;background:linear-gradient(180deg,rgba(255,255,255,0) 0%,rgba(255,255,255,1) 24%,rgba(255,255,255,1) 100%);padding:24px 0;border-top:1px solid #E2E8F0;display:flex;justify-content:flex-end;align-items:center;gap:12px}
+.bottombar .hint{display:none}
+.actions{display:flex;gap:10px}
+.stat-grid{margin:10px 0 8px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (min-width: 640px){ .stat-grid{ grid-template-columns: repeat(6, minmax(0,1fr)); } }
+.stat-label{font-size:11px;letter-spacing:.08em;color:#64748b}
+.stat-value{font-weight:800;font-size:18px;letter-spacing:.04em}
+.summary-words{margin-top:8px}
+
+/* Mobile responsive adjustments */
+@media (max-width: 480px){
+  /* Halve vertical padding inside sections; keep horizontal padding */
+  .section{ padding:9px 18px; }
+  /* Header section breathing room and tighter letter bubble */
+  .section.today{ padding:11px 22px; }
+  .letter{ width:68px; height:68px; font-size:38px; }
+  .theme .value{ font-size:22px; }
+  .compact-controls{ right:10px; top:10px; }
+  .timer-mini{ min-width:70px; height:32px; font-size:13px; }
+  .mic-mini{ width:36px; height:36px; font-size:17px; }
+
+  /* Giant input sizing so long words fit on small screens */
+  .giant-input{ font-size:48px; height:92px; line-height:92px; letter-spacing:.06em; }
+  .composer{ min-height:150px; }
+  .placeholder-letter{ width:140px; height:140px; font-size:72px; }
+
+  /* Modal summary word list readability */
+  .wordstream li,.wordstream span{ font-size:11px; }
+  /* Remove separator line above Start button on mobile */
+  .bottombar{ border-top:0; }
+
+  /* Bigger, centered Start button before game starts */
+  body:not(.running) .bottombar{ justify-content:center; }
+  body:not(.running) .bottombar .actions{ width:100%; display:flex; justify-content:center; }
+  body:not(.running) #startBtn{
+    font-size:20px; font-weight:800; letter-spacing:.06em;
+    padding:18px 28px; height:56px; border-radius:16px;
+    width:clamp(200px, 70vw, 340px);
+  }
+}
+
+/* Provide bottom breathing room when OSK visible so input + words remain visible */
+@media (max-width: 480px){
+  body.osk-open main#page{ padding-bottom: calc(220px + env(safe-area-inset-bottom)); }
+}
+
+/* When game isn't running (no OSK, incl. prestart and voice), make composer taller on mobile */
+@media (max-width: 480px){
+  body:not(.running) .composer{ min-height: 280px; }
+}
+

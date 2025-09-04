@@ -8,6 +8,7 @@ from urllib.error import HTTPError, URLError
 
 from fastapi import FastAPI, Request, Depends, Body, HTTPException
 from fastapi.responses import JSONResponse, HTMLResponse
+from starlette.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.sessions import SessionMiddleware
 from dotenv import load_dotenv
@@ -28,6 +29,7 @@ logger.setLevel(logging.INFO)
 
 SESSION_SECRET = os.getenv("SESSION_SECRET") or secrets.token_urlsafe(32)
 app.add_middleware(SessionMiddleware, secret_key=SESSION_SECRET)
+app.mount('/static', StaticFiles(directory=str(Path(__file__).resolve().parent / 'static')), name='static')
 
 TZ = timezone(timedelta(hours=10))  # Australia/Melbourne
 BASE_DIR = Path(__file__).resolve().parent
