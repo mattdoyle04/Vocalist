@@ -125,6 +125,11 @@ function setTimer(secs){ state.remaining=secs; document.getElementById("timerMin
 async function startRound(){
   showStartPlaceholder(false);
   await syncAndRevealToday();
+  // If still no letter (e.g., network hiccup), try a non-advancing refresh
+  const bubble = document.getElementById('letterBubble');
+  if (!bubble.textContent || bubble.textContent.trim() === '?') {
+    try { await syncToday(false); } catch {}
+  }
   const ti=document.getElementById('typeInput'); ti.placeholder=document.getElementById('letterBubble').textContent; ti.disabled=false; document.getElementById('micMini').disabled=false;
   if(startRound._ul) startRound._ul.innerHTML="";
   state.words.clear(); state.onTheme.clear(); state.offTheme.clear(); state.invalid=0; state.startedAt=Date.now(); state.running=true; try{ document.body.classList.add('running'); }catch{} clearBuffer(); renderBuffer();
