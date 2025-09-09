@@ -166,7 +166,7 @@ if SUPABASE_URL and SUPABASE_SERVICE_ROLE:
 
 # ---------------- Themes / validation ----------------
 DATA_DIR = BASE_DIR / "data" / "themes"
-THEMES: List[str] = ["animals", "food", "countries"]
+THEMES: List[str] = ["animals"]
 _theme_cache: Dict[str, Set[str]] = {}
 
 def _norm_word(s: str) -> str:
