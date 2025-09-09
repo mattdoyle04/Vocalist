@@ -152,7 +152,7 @@ async function endRound(){
   document.getElementById('sumTheme').textContent  = theme.toUpperCase();
   document.getElementById('sumValid').textContent  = state.onTheme.size;
   document.getElementById('sumWords').textContent  = state.words.size;
-  document.getElementById('sumBonus').textContent  = '+' + (window.__letterBonus||0);
+  // Bonus per word removed in new scoring; nothing to show here
   document.getElementById('sumScore').textContent  = '…';
   const list = document.getElementById('sumWordList');
   if (list){ list.innerHTML=''; Array.from(state.onTheme).sort().forEach(w=>{const s=document.createElement('span'); s.textContent=w.toUpperCase(); list.appendChild(s);}); Array.from(state.offTheme).sort().forEach(w=>{const s=document.createElement('span'); s.textContent=w.toUpperCase(); s.classList.add('off-theme'); list.appendChild(s);}); }
@@ -167,7 +167,7 @@ async function endRound(){
 
 function refreshLeaderboardIfOpen(){ const dlg = document.querySelector('dialog[data-role="leaderboard"]'); if (dlg && window.htmx) htmx.ajax('GET', '/leaderboard', { target: dlg, swap: 'outerHTML' }); }
 async function submitRun(payload){
-  try { const resp = await fetch('/api/submit-run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if (!resp.ok) { document.getElementById('sumScore').textContent='—'; return; } const d = await resp.json(); if (typeof d.score === 'number') { document.getElementById('sumScore').textContent = String(d.score); if (typeof d.bonus_per_word === 'number') document.getElementById('sumBonus').textContent = '+' + d.bonus_per_word; } refreshLeaderboardIfOpen(); } catch { document.getElementById('sumScore').textContent='—'; }
+  try { const resp = await fetch('/api/submit-run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); if (!resp.ok) { document.getElementById('sumScore').textContent='—'; return; } const d = await resp.json(); if (typeof d.score === 'number') { document.getElementById('sumScore').textContent = String(d.score); } refreshLeaderboardIfOpen(); } catch { document.getElementById('sumScore').textContent='—'; }
 }
 
 // Wire OSK events
@@ -186,4 +186,3 @@ async function submitRun(payload){
     }
   });
 })();
-

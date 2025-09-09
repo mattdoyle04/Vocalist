@@ -203,6 +203,17 @@ LETTERS = [chr(ord("A") + i) for i in range(26)]
 SCRABBLE_COUNTS = {"A":9,"B":2,"C":2,"D":4,"E":12,"F":2,"G":3,"H":2,"I":9,"J":1,"K":1,"L":4,"M":2,"N":6,"O":8,"P":2,"Q":1,"R":6,"S":4,"T":6,"U":4,"V":2,"W":2,"X":1,"Y":2,"Z":1}
 SCRABBLE_POINTS = {"A":1,"B":3,"C":3,"D":2,"E":1,"F":4,"G":2,"H":4,"I":1,"J":8,"K":5,"L":1,"M":3,"N":1,"O":1,"P":3,"Q":10,"R":1,"S":1,"T":1,"U":1,"V":4,"W":4,"X":8,"Y":4,"Z":10}
 
+# Custom per-letter scoring (provided rules)
+LETTER_POINTS = {
+    "A":1, "B":3, "C":2, "D":2, "E":1, "F":3, "G":2, "H":2, "I":1, "J":4, "K":4,
+    "L":2, "M":2, "N":1, "O":1, "P":2, "Q":4, "R":1, "S":1, "T":1, "U":2, "V":3,
+    "W":4, "X":4, "Y":3, "Z":4,
+}
+
+def word_points(word: str) -> int:
+    """Sum custom letter values for alphabetic characters in the word."""
+    return sum(LETTER_POINTS.get(ch.upper(), 0) for ch in (word or "") if ch.isalpha())
+
 def _hash32(s: str) -> int:
     import zlib
     return zlib.crc32(s.encode("utf-8")) & 0xFFFFFFFF
@@ -479,16 +490,21 @@ def api_submit_run(
 
     valid = 0
     off_theme = 0
+    total_points = 0
     for w in words:
         r = check_word_server(w, letter, theme)
         if not r["ok"]:
             continue
-        if r["theme_ok"]: valid += 1
-        else: off_theme += 1
+        if r["theme_ok"]:
+            valid += 1
+            total_points += word_points(r.get("word") or w)
+        else:
+            off_theme += 1
 
-    base_points = 1
-    bonus = rarity_bonus(letter)
-    score = valid * (base_points + bonus)
+    # New scoring: sum per-letter values across valid (on-theme) words
+    base_points = 0
+    bonus = 0
+    score = int(total_points)
 
     if SB:
         try:
@@ -504,8 +520,12 @@ def api_submit_run(
         logger.error("Supabase REST not configured (no SUPABASE_SERVICE_ROLE). Returning score only.")
 
     return JSONResponse({
-        "ok": True, "score": score, "valid": valid, "off_theme": off_theme,
-        "letter": letter, "theme": theme, "bonus_per_word": bonus, "base_points": base_points
+        "ok": True,
+        "score": score,
+        "valid": valid,
+        "off_theme": off_theme,
+        "letter": letter,
+        "theme": theme,
     })
 
 # ---------------- Debug helpers ----------------
