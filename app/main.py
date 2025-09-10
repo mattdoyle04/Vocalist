@@ -226,8 +226,17 @@ def _rng(seed: int) -> float:
     return (x & 0xFFFFFFFF) / 2**32
 
 def _weights():
-    total = sum(SCRABBLE_COUNTS.values())
-    return [SCRABBLE_COUNTS[ch] / total for ch in LETTERS]
+    """Probability weights for picking today's letter.
+    Inverse of our LETTER_POINTS so low-score letters (e.g., E=1) appear more often
+    and high-score letters (e.g., Z=4) appear less often.
+    """
+    raw = []
+    for ch in LETTERS:
+        pts = LETTER_POINTS.get(ch, 1)  # default to 1 if missing
+        w = 1.0 / float(max(pts, 1))    # inverse weighting; 1→1.0, 4→0.25
+        raw.append(w)
+    total = sum(raw) or 1.0
+    return [w / total for w in raw]
 
 def _weighted(seed: int, items: List[str], weights: List[float]) -> str:
     r = _rng(seed); acc = 0.0
