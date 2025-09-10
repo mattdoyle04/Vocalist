@@ -26,14 +26,7 @@
 .stat-label{font-size:11px;letter-spacing:.08em;color:#64748b}
 .stat-value{font-weight:800;font-size:18px;letter-spacing:.04em}
 .summary-words{margin-top:8px}
-/* Summary (Time's up) modal: uniform column widths and centered text */
-#summaryModal .tbl{ table-layout: fixed; width:100%; }
-#summaryModal .tbl th, #summaryModal .tbl td{ text-align:center; }
-#summaryModal .tbl th:nth-child(1), #summaryModal .tbl td:nth-child(1){ width:20%; }
-#summaryModal .tbl th:nth-child(2), #summaryModal .tbl td:nth-child(2){ width:20%; }
-#summaryModal .tbl th:nth-child(3), #summaryModal .tbl td:nth-child(3){ width:20%; }
-#summaryModal .tbl th:nth-child(4), #summaryModal .tbl td:nth-child(4){ width:20%; }
-#summaryModal .tbl th:nth-child(5), #summaryModal .tbl td:nth-child(5){ width:20%; }
+/* Summary (Time's up) modal styles moved to base.css for global consistency */
 
 /* Mobile responsive adjustments */
 @media (max-width: 480px){
