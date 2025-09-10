@@ -26,6 +26,8 @@
 .stat-label{font-size:11px;letter-spacing:.08em;color:#64748b}
 .stat-value{font-weight:800;font-size:18px;letter-spacing:.04em}
 .summary-words{margin-top:8px}
+/* Center summary modal table like other modals */
+#summaryModal .tbl th, #summaryModal .tbl td{ text-align:center; }
 
 /* Mobile responsive adjustments */
 @media (max-width: 480px){
@@ -68,4 +70,3 @@
 @media (max-width: 480px){
   body:not(.running) .composer{ min-height: 280px; }
 }
-

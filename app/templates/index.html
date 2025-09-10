@@ -44,12 +44,27 @@
     <div class="modal-card">
       <h2>Time’s up</h2>
       <p class="modal-subtle">Here’s how you went this round.</p>
-      <div class="stat-grid" id="summaryStats">
-        <div><div class="stat-label">LETTER</div><div class="stat-value" id="sumLetter">—</div></div>
-        <div><div class="stat-label">THEME</div><div class="stat-value" id="sumTheme">—</div></div>
-        <div><div class="stat-label">VALID</div><div class="stat-value" id="sumValid">0</div></div>
-        <div><div class="stat-label">WORDS</div><div class="stat-value" id="sumWords">0</div></div>
-        <div><div class="stat-label">SCORE</div><div class="stat-value" id="sumScore">…</div></div>
+      <div id="summaryStats" style="margin:10px 0 8px;">
+        <table class="tbl" style="width:100%">
+          <thead>
+            <tr>
+              <th>Letter</th>
+              <th>Theme</th>
+              <th>Valid</th>
+              <th>Words</th>
+              <th>Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td id="sumLetter">—</td>
+              <td id="sumTheme">—</td>
+              <td id="sumValid">0</td>
+              <td id="sumWords">0</td>
+              <td id="sumScore">…</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
       <div class="summary-words">
         <div class="stat-label" style="margin-bottom:6px">WORDS ENTERED</div>
