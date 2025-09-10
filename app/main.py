@@ -374,6 +374,23 @@ def sb_stats_for_player(pid: int) -> Dict[str,Any]:
         "last_played": max([h["play_date"] for h in hist], default="—") if games else "—",
     }
 
+def sb_last_words_for_player(pid: int) -> List[str]:
+    """Return the most recent game's words list for the player (empty if none)."""
+    if not SB:
+        return []
+    rows = SB.get("/game_run", {
+        "select": "words_json,created_at",
+        "player_id": f"eq.{pid}",
+        "order": "created_at.desc",
+        "limit": "1",
+    }) or []
+    if not rows:
+        return []
+    try:
+        return list(json.loads(rows[0].get("words_json") or "[]"))
+    except Exception:
+        return []
+
 def sb_leaderboard(limit:int=10) -> List[Dict[str,Any]]:
     if not SB: return []
     rows = SB.get("/game_run", {"select":"player_id,score", "limit":"5000"}) or []
@@ -421,11 +438,13 @@ def _safe_dialog(request: Request, template: str, ctx: Dict[str,Any]) -> HTMLRes
 
 @app.get("/my-stats", response_class=HTMLResponse)
 def my_stats(request: Request, user: Dict[str,Any] = Depends(require_user)):
-    ctx = {"request": request, "stats": {}}
+    ctx = {"request": request, "stats": {}, "last_words": []}
     try:
         player = sb_get_player_by_uid((user or {}).get("sub") or (user or {}).get("id"))
         if player:
-            ctx["stats"] = sb_stats_for_player(int(player["id"]))
+            pid = int(player["id"])
+            ctx["stats"] = sb_stats_for_player(pid)
+            ctx["last_words"] = sb_last_words_for_player(pid)
     except Exception as e:
         logger.exception("my-stats REST error: %s", e)
     return _safe_dialog(request, "_my_stats.html", ctx)

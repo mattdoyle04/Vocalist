@@ -1,10 +1,10 @@
 <dialog data-autoshow id="dlg-my-stats">
   <style>
-    @media (max-width: 480px) {
-      .stats-grid {
-        grid-template-columns: 1fr;
-      }
-    }
+    /* Center table text like other modals */
+    #dlg-my-stats .tbl th, #dlg-my-stats .tbl td{ text-align:center; }
+    /* Simple wordstream styling (mirrors main page) */
+    #dlg-my-stats .wordstream{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 0;padding:2px;list-style:none}
+    #dlg-my-stats .wordstream span{font-weight:700;letter-spacing:.03em;font-size:12px;color:#475569;line-height:1.1;margin:0}
   </style>
   <div class="modal-card">
     <form method="dialog"><button class="modal-x" aria-label="Close">×</button></form>
@@ -13,13 +13,36 @@
     <hr class="modal-divider" />
     {% set s = stats|default({}) %}
     {% if s and (s.games_played|default(0)) > 0 %}
-      <div class="stats-grid" style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:8px 0">
-        <div><div class="modal-subtle">GAMES</div><div style="font-weight:800">{{ s.games_played }}</div></div>
-        <div><div class="modal-subtle">STREAK</div><div style="font-weight:800">{{ s.streak }}</div></div>
-        <div><div class="modal-subtle">TOTAL</div><div style="font-weight:800">{{ s.total_score }}</div></div>
-        <div><div class="modal-subtle">AVG</div><div style="font-weight:800">{{ s.avg_score|round(1) }}</div></div>
-        <div><div class="modal-subtle">BEST</div><div style="font-weight:800">{{ s.best_score }}</div></div>
-      </div>
+      <table class="tbl" style="margin:8px 0">
+        <thead>
+          <tr>
+            <th>Games</th>
+            <th>Streak</th>
+            <th>Total</th>
+            <th>Avg</th>
+            <th>Best</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{{ s.games_played }}</td>
+            <td>{{ s.streak }}</td>
+            <td>{{ s.total_score }}</td>
+            <td>{{ s.avg_score|round(1) }}</td>
+            <td>{{ s.best_score }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      {% set last = last_words|default([]) %}
+      {% if last and last|length > 0 %}
+        <div style="margin-top:8px">
+          <div class="modal-subtle">Last game words</div>
+          <div class="wordstream">
+            {% for w in last %}<span>{{ w|upper }}</span>{% endfor %}
+          </div>
+        </div>
+      {% endif %}
     {% else %}
       <p class="modal-subtle">No games yet. Play a round to see your stats.</p>
     {% endif %}
