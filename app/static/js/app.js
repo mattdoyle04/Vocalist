@@ -96,7 +96,7 @@ window.addEventListener('resize', ()=>{ fitGiantInput(); });
 document.getElementById('startBtn').addEventListener("click", async () => {
   // If already authed, just start
   try {
-    const existing = await (window.getSessionSafe?.() || Promise.resolve(null));
+    const existing = await ((typeof getSessionSafe === 'function' ? getSessionSafe() : (window.getSessionSafe?.() || Promise.resolve(null))));
     if (existing?.access_token) {
       window.__supabase_token = existing.access_token;
       state.voice = false;
@@ -111,7 +111,7 @@ document.getElementById('startBtn').addEventListener("click", async () => {
   const tryStart = async () => {
     if (started || state.running) return;
     try {
-      const sess = await (window.getSessionSafe?.() || Promise.resolve(null));
+      const sess = await ((typeof getSessionSafe === 'function' ? getSessionSafe() : (window.getSessionSafe?.() || Promise.resolve(null))));
       if (sess?.access_token) {
         started = true;
         window.__supabase_token = sess.access_token;
