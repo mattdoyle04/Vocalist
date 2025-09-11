@@ -93,37 +93,10 @@ document.getElementById('typeInput').addEventListener("keydown",(e)=>{ if(e.key!
 document.getElementById('typeInput').addEventListener('input', ()=>{ if (!isSmallScreen()) fitGiantInput(); });
 window.addEventListener('resize', ()=>{ fitGiantInput(); });
 
-document.getElementById('startBtn').addEventListener("click", async () => {
-  // If already authed, just start
-  try {
-    const existing = await ((typeof getSessionSafe === 'function' ? getSessionSafe() : (window.getSessionSafe?.() || Promise.resolve(null))));
-    if (existing?.access_token) {
-      window.__supabase_token = existing.access_token;
-      state.voice = false;
-      startRound();
-      return;
-    }
-  } catch {}
-
-  // Not authed: open login and start as soon as session appears
-  document.getElementById('authDialog')?.showModal();
-  let started = false;
-  const tryStart = async () => {
-    if (started || state.running) return;
-    try {
-      const sess = await ((typeof getSessionSafe === 'function' ? getSessionSafe() : (window.getSessionSafe?.() || Promise.resolve(null))));
-      if (sess?.access_token) {
-        started = true;
-        window.__supabase_token = sess.access_token;
-        state.voice = false;
-        startRound();
-      }
-    } catch {}
-  };
-  // On auth state change
-  try { window.sb?.auth?.onAuthStateChange(() => { tryStart(); }); } catch {}
-  // Also on dialog close (user might have completed auth via email link in another tab)
-  document.getElementById('authDialog')?.addEventListener('close', tryStart, { once: true });
+document.getElementById('startBtn').addEventListener("click", () => {
+  // Start immediately; authentication will be requested at submit time
+  state.voice = false;
+  startRound();
 });
 
 // Finish button removed (no early end)
