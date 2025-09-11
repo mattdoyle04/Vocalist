@@ -29,12 +29,12 @@ async function bootPlaceholder(){
   showStartPlaceholder(!state.running);
   try{ document.body.classList.remove('running'); }catch{}
   window.sb?.auth?.onAuthStateChange((_e,_sess)=>{ if(!state.running) showStartPlaceholder(true); });
-}
+  }
 // Run boot once DOM is ready; handle cases where the event already fired
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', bootPlaceholder);
+  document.addEventListener('DOMContentLoaded', () => { bootPlaceholder(); setTimeout(()=> showStartPlaceholder(true), 0); });
 } else {
-  bootPlaceholder();
+  bootPlaceholder(); setTimeout(()=> showStartPlaceholder(true), 0);
 }
 
 function showTinyHint(msg){ const el=document.getElementById('tinyHint'); el.textContent=String(msg||"").toUpperCase(); el.classList.add("show"); clearTimeout(showTinyHint._t); showTinyHint._t=setTimeout(()=> el.classList.remove("show"), 1200); }
@@ -93,7 +93,7 @@ document.getElementById('typeInput').addEventListener("keydown",(e)=>{ if(e.key!
 document.getElementById('typeInput').addEventListener('input', ()=>{ if (!isSmallScreen()) fitGiantInput(); });
 window.addEventListener('resize', ()=>{ fitGiantInput(); });
 
-document.getElementById('startBtn').addEventListener("click", async () => {
+async function handleStart(){
   const session = await window.ensureAuth({ force: true });
   if (!session) {
     // Auto-start once user signs in
@@ -112,7 +112,12 @@ document.getElementById('startBtn').addEventListener("click", async () => {
   // Default to typed input on start (no mic pre-prompt)
   state.voice = false;
   startRound();
-});
+}
+
+// Attach click listener robustly (direct + delegated)
+const startBtnEl = document.getElementById('startBtn');
+if (startBtnEl) startBtnEl.addEventListener('click', handleStart);
+document.addEventListener('click', (e) => { const el = e.target?.closest?.('#startBtn'); if (el) { e.preventDefault(); handleStart(); } });
 
 // Finish button removed (no early end)
 
