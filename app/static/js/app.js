@@ -24,10 +24,10 @@ function showStartPlaceholder(show){
   try{ document.body.classList.toggle('prestart', !!show); }catch{}
 }
 async function bootPlaceholder(){
-  const session = await window.ensureAuth({force:false});
-  // Always show the big "?" placeholder when not running, regardless of login
-  showStartPlaceholder(!state.running);
+  // Always show placeholder pre-start (don’t reveal theme)
+  showStartPlaceholder(true);
   try{ document.body.classList.remove('running'); }catch{}
+  // Keep placeholder visible until round starts
   window.sb?.auth?.onAuthStateChange((_e,_sess)=>{ if(!state.running) showStartPlaceholder(true); });
 }
 // Run boot once DOM is ready; handle cases where the event already fired
@@ -94,24 +94,36 @@ document.getElementById('typeInput').addEventListener('input', ()=>{ if (!isSmal
 window.addEventListener('resize', ()=>{ fitGiantInput(); });
 
 document.getElementById('startBtn').addEventListener("click", async () => {
-  const session = await window.ensureAuth({ force: true });
-  if (!session) {
-    // Auto-start once user signs in
-    window.__startAfterLogin = true;
+  // If already authed, just start
+  try {
+    const existing = await (window.getSessionSafe?.() || Promise.resolve(null));
+    if (existing?.access_token) {
+      window.__supabase_token = existing.access_token;
+      state.voice = false;
+      startRound();
+      return;
+    }
+  } catch {}
+
+  // Not authed: open login and start as soon as session appears
+  document.getElementById('authDialog')?.showModal();
+  let started = false;
+  const tryStart = async () => {
+    if (started || state.running) return;
     try {
-      window.sb?.auth?.onAuthStateChange((_evt, sess) => {
-        if (window.__startAfterLogin && sess?.access_token && !state.running) {
-          window.__startAfterLogin = false;
-          startRound();
-        }
-      });
+      const sess = await (window.getSessionSafe?.() || Promise.resolve(null));
+      if (sess?.access_token) {
+        started = true;
+        window.__supabase_token = sess.access_token;
+        state.voice = false;
+        startRound();
+      }
     } catch {}
-    return;
-  }
-  if (session.access_token) window.__supabase_token = session.access_token;
-  // Default to typed input on start (no mic pre-prompt)
-  state.voice = false;
-  startRound();
+  };
+  // On auth state change
+  try { window.sb?.auth?.onAuthStateChange(() => { tryStart(); }); } catch {}
+  // Also on dialog close (user might have completed auth via email link in another tab)
+  document.getElementById('authDialog')?.addEventListener('close', tryStart, { once: true });
 });
 
 // Finish button removed (no early end)
