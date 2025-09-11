@@ -25,9 +25,10 @@ function showStartPlaceholder(show){
 }
 async function bootPlaceholder(){
   const session = await window.ensureAuth({force:false});
-  showStartPlaceholder(!!session && !state.running);
+  // Always show the big "?" placeholder when not running, regardless of login
+  showStartPlaceholder(!state.running);
   try{ document.body.classList.remove('running'); }catch{}
-  window.sb?.auth?.onAuthStateChange((_e,sess)=>{ if(!state.running) showStartPlaceholder(!!sess); });
+  window.sb?.auth?.onAuthStateChange((_e,_sess)=>{ if(!state.running) showStartPlaceholder(true); });
 }
 document.addEventListener('DOMContentLoaded', bootPlaceholder);
 
