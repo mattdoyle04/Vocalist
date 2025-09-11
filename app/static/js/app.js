@@ -30,7 +30,12 @@ async function bootPlaceholder(){
   try{ document.body.classList.remove('running'); }catch{}
   window.sb?.auth?.onAuthStateChange((_e,_sess)=>{ if(!state.running) showStartPlaceholder(true); });
 }
-document.addEventListener('DOMContentLoaded', bootPlaceholder);
+// Run boot once DOM is ready; handle cases where the event already fired
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootPlaceholder);
+} else {
+  bootPlaceholder();
+}
 
 function showTinyHint(msg){ const el=document.getElementById('tinyHint'); el.textContent=String(msg||"").toUpperCase(); el.classList.add("show"); clearTimeout(showTinyHint._t); showTinyHint._t=setTimeout(()=> el.classList.remove("show"), 1200); }
 function setMicVisual(on){ document.getElementById("micMini").setAttribute("aria-pressed", String(on)); }
@@ -90,7 +95,19 @@ window.addEventListener('resize', ()=>{ fitGiantInput(); });
 
 document.getElementById('startBtn').addEventListener("click", async () => {
   const session = await window.ensureAuth({ force: true });
-  if (!session) return;
+  if (!session) {
+    // Auto-start once user signs in
+    window.__startAfterLogin = true;
+    try {
+      window.sb?.auth?.onAuthStateChange((_evt, sess) => {
+        if (window.__startAfterLogin && sess?.access_token && !state.running) {
+          window.__startAfterLogin = false;
+          startRound();
+        }
+      });
+    } catch {}
+    return;
+  }
   if (session.access_token) window.__supabase_token = session.access_token;
   // Default to typed input on start (no mic pre-prompt)
   state.voice = false;
