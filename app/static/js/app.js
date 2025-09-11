@@ -153,8 +153,10 @@ async function endRound(){
   const letter = document.getElementById('letterBubble').textContent || '—';
   const theme  = document.getElementById('themeHeading').textContent || '—';
   // Summary tiles (no Off Theme, no Duration)
-  document.getElementById('sumLetter').textContent = letter.toUpperCase();
-  document.getElementById('sumTheme').textContent  = theme.toUpperCase();
+  const letterUp = letter.toUpperCase();
+  const themeUp  = theme.toUpperCase();
+  document.getElementById('sumLetterHdr')?.textContent = letterUp;
+  document.getElementById('sumThemeHdr')?.textContent  = themeUp;
   document.getElementById('sumValid').textContent  = state.onTheme.size;
   document.getElementById('sumWords').textContent  = state.words.size;
   // Bonus per word removed in new scoring; nothing to show here
